@@ -467,13 +467,10 @@ pub fn available_for_withdrawal(vesting: &Vesting, current_ts: u64) -> u64 {
         return vesting.remaining_amount;
     }
 
-    let mut available: u64 = 0;
     let interval = current_ts - vesting.accounting_ts;
-    if interval > vesting.period {
-        let unlocked = interval.checked_div(vesting.period).unwrap() * vesting.periodic_unlock_amount;
-        let cliff_amount = if current_ts >= vesting.cliff { vesting.cliff_amount } else { 0 };
-        available = unlocked + vesting.tge_amount + cliff_amount - vesting.withdrawn_amount;
-    }
+    let unlocked = interval.checked_div(vesting.period).unwrap() * vesting.periodic_unlock_amount;
+    let cliff_amount = if current_ts >= vesting.cliff { vesting.cliff_amount } else { 0 };
+    let available = unlocked + vesting.tge_amount + cliff_amount - vesting.withdrawn_amount;
 
     available
 }

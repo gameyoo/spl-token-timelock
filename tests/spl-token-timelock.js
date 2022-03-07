@@ -75,6 +75,7 @@ describe('spl-token-timelock', () => {
     const DECIMALS = 9;
 
     // Timestamp (in seconds) when the stream/token vesting starts,Divide by 1000 since Unix timestamp is seconds.
+    //const start = new BN(+new Date() / 1000 - 5);    //Verify bypass_timestamp_check param that is works.
     const start = new BN(+new Date() / 1000 + 5);
 
     // Timestamp (in seconds) of cliff.
@@ -188,7 +189,8 @@ describe('spl-token-timelock', () => {
             period,
             cliff,
             new BN(10),
-            new BN(20), {
+            new BN(20),
+            false, {
                 accounts: {
                     granter: granter.publicKey,
                     mint: mint,

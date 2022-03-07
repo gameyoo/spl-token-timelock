@@ -55,10 +55,10 @@ pub mod spl_token_timelock {
     ) -> ProgramResult {
         msg!("Initializing SPL token stream");
 
+        let now = ctx.accounts.clock.unix_timestamp as u64;
         if !bypass_timestamp_check {
 
             // Check start,end,cliff timestamp validity.
-            let now = ctx.accounts.clock.unix_timestamp as u64;
             if !time_check(now, start_ts, end_ts, cliff) {
                 emit!(CreateVestingEvent {
                     data: ErrorCode::InvalidSchedule as u64,

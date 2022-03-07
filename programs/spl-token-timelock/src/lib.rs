@@ -36,6 +36,7 @@ pub mod spl_token_timelock {
      * @param cliff : Vesting contract "cliff" timestamp.
      * @param cliff_release_rate : The rate of amount unlocked at the "cliff" timestamp.
      * @param tge_release_rate : The rate of amount unlocked at TGE.
+     * @param bypass_timestamp_check : Whether to bypass check the timestamp.
      */
     pub fn create_vesting(
         ctx: Context<CreateVesting>,
@@ -50,17 +51,21 @@ pub mod spl_token_timelock {
         cliff: u64,
         cliff_release_rate: u64,
         tge_release_rate: u64,
+        bypass_timestamp_check: bool,
     ) -> ProgramResult {
         msg!("Initializing SPL token stream");
 
-        // Check start,end,cliff timestamp validity.
-        let now = ctx.accounts.clock.unix_timestamp as u64;
-        if !time_check(now, start_ts, end_ts, cliff) {
-            emit!(CreateVestingEvent {
-                data: ErrorCode::InvalidSchedule as u64,
-                status: "err".to_string(),
-            });
-            return Err(ErrorCode::InvalidSchedule.into());
+        if !bypass_timestamp_check {
+
+            // Check start,end,cliff timestamp validity.
+            let now = ctx.accounts.clock.unix_timestamp as u64;
+            if !time_check(now, start_ts, end_ts, cliff) {
+                emit!(CreateVestingEvent {
+                    data: ErrorCode::InvalidSchedule as u64,
+                    status: "err".to_string(),
+                });
+                return Err(ErrorCode::InvalidSchedule.into());
+            }
         }
 
         // Check time step period in seconds per validity.
@@ -197,7 +202,6 @@ pub mod spl_token_timelock {
      * @param amount : The number of withdraw wanted.
      */
     pub fn withdraw(ctx: Context<Withdraw>, amount: u64) -> ProgramResult {
-
         // Check withdrawal amount validity.
         if amount == 0 {
             emit!(WithdrawEvent {
@@ -304,12 +308,10 @@ pub mod spl_token_timelock {
 /// --------------------------------
 
 /* CreateVesting context */
-
 // Accounts for CreateVesting.
 #[derive(Accounts)]
 #[instruction(total_amount: u64, nonce: u8)]
 pub struct CreateVesting<'info> {
-
     /// Granter of vesting.
     pub granter: Signer<'info>,
 
@@ -415,7 +417,6 @@ pub struct Withdraw<'info> {
 // Accounts for CancelVesting.
 #[derive(Accounts)]
 pub struct CancelVesting<'info> {
-
     /// Granter of vesting.
     #[account(mut)]
     pub granter: Signer<'info>,

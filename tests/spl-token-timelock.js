@@ -96,6 +96,10 @@ describe('spl-token-timelock', () => {
     let granter = provider.wallet;
     let recipientToken;
     let escrowVault;
+
+    let config;
+    let config_bump;
+
     const recipient = Keypair.generate();
     const vesting = Keypair.generate();
 
@@ -161,7 +165,18 @@ describe('spl-token-timelock', () => {
         console.log("recipient token:", recipientToken.toBase58());
         console.log("mint:", mint.toBase58());
         console.log("nonce:", nonce);
+
+        [config, config_bump] = await PublicKey.findProgramAddress(
+
+        );
     });
+
+    it("Initialize", async() => {
+
+        console.log(`Initialize:`);
+
+
+    })
 
     it("Create vesting", async() => {
 

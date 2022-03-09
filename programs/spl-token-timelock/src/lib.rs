@@ -22,6 +22,210 @@ declare_id!("7ShzknMhPAUF2Sq8KzHSKxdCBaMMSgnfkttcbTuQamEz");
 pub mod spl_token_timelock {
     use super::*;
 
+    // initialize for create_vesting_from_vault instruction.
+    /**
+     * @param ctx : context of initialize.
+     * @param config_bump : The PDA bump of config account.
+     * @param payer_token_vault_bump : The PDA bump of payer vault account.
+     */
+    pub fn initialize(
+        ctx: Context<Initialize>,
+        config_bump: u8,
+        payer_token_vault_bump: u8,
+    ) -> ProgramResult {
+
+        let config = &mut ctx.accounts.config;
+        config.payer_token_vault = ctx.accounts.payer_token_vault.to_account_info().key();
+        config.authority = *ctx.accounts.authority.key;
+        config.mint = ctx.accounts.mint.to_account_info().key();
+        config.config_bump = config_bump;
+        config.payer_token_vault_bump = payer_token_vault_bump;
+
+        Ok(())
+    }
+
+    // Create vesting from vault.
+    /**
+     * @param ctx : context of Create vesting from vault.
+     * @param total_amount : The starting balance of this vesting account, i.e., how much was originally deposited.
+     * @param nonce : Signer nonce.
+     * @param vesting_id : The vesting id.
+     * @param vesting_name : The vesting name.
+     * @param investor_wallet_address : The investor wallet address.
+     * @param start_ts : Timestamp when the tokens start vesting.
+     * @param end_ts : Timestamp when all tokens are fully vested.
+     * @param period : Time step (period) in seconds per which the vesting occurs.
+     * @param cliff : Vesting contract "cliff" timestamp.
+     * @param cliff_release_rate : The rate of amount unlocked at the "cliff" timestamp.
+     * @param tge_release_rate : The rate of amount unlocked at TGE.
+     * @param bypass_timestamp_check : Whether to bypass check the timestamp.
+     */
+    pub fn create_vesting_from_vault(
+        ctx: Context<CreateVestingFromVault>,
+        total_amount: u64,
+        nonce: u8,
+        vesting_id: u64,
+        vesting_name: [u8; 32],
+        investor_wallet_address: [u8; 64],
+        start_ts: u64,
+        end_ts: u64,
+        period: u64,
+        cliff: u64,
+        cliff_release_rate: u64,
+        tge_release_rate: u64,
+        bypass_timestamp_check: bool,
+    ) -> ProgramResult {
+        msg!("create vesting from vault");
+
+        let now = ctx.accounts.clock.unix_timestamp as u64;
+        if !bypass_timestamp_check {
+            // Check start,end,cliff timestamp validity.
+            if !time_check(now, start_ts, end_ts, cliff) {
+                emit!(CreateVestingEvent {
+                    data: ErrorCode::InvalidSchedule as u64,
+                    status: "err".to_string(),
+                });
+                return Err(ErrorCode::InvalidSchedule.into());
+            }
+        }
+
+        // Check time step period in seconds per validity.
+        if period == 0 || period >= (end_ts - start_ts) {
+            emit!(CreateVestingEvent {
+                data: ErrorCode::InvalidPeriod as u64,
+                status: "err".to_string(),
+            });
+            return Err(ErrorCode::InvalidPeriod.into());
+        }
+
+        // Check release rate of tge and cliff validity.
+        if tge_release_rate > 100
+            || cliff_release_rate > 100
+            || tge_release_rate + cliff_release_rate > 100
+        {
+            emit!(CreateVestingEvent {
+                data: ErrorCode::InvalidReleaseRate as u64,
+                status: "err".to_string(),
+            });
+            return Err(ErrorCode::InvalidReleaseRate.into());
+        }
+
+        // Verify that the recipient's associated token address is correct.
+        let recipient_tokens_key = associated_token::get_associated_token_address(
+            ctx.accounts.recipient.key,
+            ctx.accounts.mint.to_account_info().key,
+        );
+        if &recipient_tokens_key != ctx.accounts.recipient_token.key {
+            emit!(CreateVestingEvent {
+                data: ErrorCode::InvalidAssociatedTokenAddress as u64,
+                status: "err".to_string(),
+            });
+            return Err(ErrorCode::InvalidAssociatedTokenAddress.into());
+        }
+
+        // Check if the recipient's associated token account has been created,
+        // and if not, create an associated token account for the recipient.
+        if ctx.accounts.recipient_token.data_is_empty() {
+            let cpi_accounts = Create {
+                payer: ctx.accounts.signer.to_account_info(),
+                associated_token: ctx.accounts.recipient_token.clone(),
+                authority: ctx.accounts.recipient.to_account_info(),
+                rent: ctx.accounts.rent.to_account_info(),
+                mint: ctx.accounts.mint.to_account_info(),
+                system_program: ctx.accounts.system_program.to_account_info(),
+                token_program: ctx.accounts.token_program.to_account_info(),
+            };
+            let cpi_program = ctx.accounts.associated_token_program.to_account_info();
+            let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts);
+            associated_token::create(cpi_ctx)?;
+        }
+
+        /*
+            Record the relevant status to the vesting account.
+        */
+        let vesting = &mut ctx.accounts.vesting;
+        vesting.magic = 0x544D4C4B;
+        vesting.version = 1;
+        vesting.nonce = nonce;
+        vesting.vesting_id = vesting_id;
+        vesting.vesting_name = vesting_name.clone();
+        vesting.investor_wallet_address = investor_wallet_address.clone();
+
+        vesting.withdrawn_amount = 0;
+        vesting.remaining_amount = total_amount;
+        vesting.total_amount = total_amount;
+
+        // vesting.granter = *ctx.accounts.granter.to_account_info().key;
+        // vesting.granter_token = *ctx.accounts.granter_token.to_account_info().key;
+        vesting.granter = *ctx.accounts.payer_token_vault.to_account_info().key;
+        vesting.granter_token = *ctx.accounts.payer_token_vault.to_account_info().key;
+
+        vesting.recipient = *ctx.accounts.recipient.to_account_info().key;
+        vesting.recipient_token = *ctx.accounts.recipient_token.key;
+        vesting.mint = *ctx.accounts.mint.to_account_info().key;
+        vesting.escrow_vault = *ctx.accounts.escrow_vault.to_account_info().key;
+
+        vesting.created_ts = now;
+        vesting.start_ts = start_ts;
+        vesting.end_ts = end_ts;
+        vesting.accounting_ts = now;
+        vesting.last_withdrawn_at = 0;
+
+        vesting.period = period;
+
+        vesting.cliff = cliff;
+        vesting.cliff_release_rate = cliff_release_rate;
+        vesting.cliff_amount = 0;
+
+        vesting.tge_release_rate = tge_release_rate;
+        vesting.tge_amount = 0;
+
+        // Calculate the cliff amount based on cliff release rate.
+        if cliff_release_rate != 0 {
+            vesting.cliff_amount =
+                amount_to_ui_amount(total_amount.saturating_mul(cliff_release_rate), 2) as u64;
+        }
+
+        // Calculate the tge amount based on tge release rate.
+        if tge_release_rate != 0 {
+            vesting.tge_amount =
+                amount_to_ui_amount(total_amount.saturating_mul(tge_release_rate), 2) as u64;
+        }
+
+        // Calculate amount to be unlocked per time during linear unlocking.
+        vesting.periodic_unlock_amount =
+            ((total_amount - vesting.tge_amount - vesting.cliff_amount) / (end_ts - start_ts))
+                * period;
+        if cliff != 0 {
+            vesting.periodic_unlock_amount =
+                ((total_amount - vesting.tge_amount - vesting.cliff_amount) / (end_ts - cliff))
+                    * period;
+        }
+
+        // Transfer tokens into the escrow vault.
+        let cpi_accounts = Transfer {
+            from: ctx.accounts.payer_token_vault.to_account_info(),
+            to: ctx.accounts.escrow_vault.to_account_info(),
+            authority: ctx.accounts.payer_token_vault.to_account_info(),
+        };
+
+        let config = &ctx.accounts.config;
+
+        let seeds = &[config.to_account_info().key.as_ref(), &[config.payer_token_vault_bump]];
+        let signer = &[&seeds[..]];
+
+        let cpi_program = ctx.accounts.token_program.to_account_info();
+        let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts).with_signer(signer);
+        token::transfer(cpi_ctx, total_amount)?;
+
+        emit!(CreateVestingEvent {
+            data: total_amount,
+            status: "ok".to_string(),
+        });
+
+        Ok(())
+    }
+
     // Create vesting.
     /**
      * @param ctx : context of Create vesting.
@@ -57,7 +261,6 @@ pub mod spl_token_timelock {
 
         let now = ctx.accounts.clock.unix_timestamp as u64;
         if !bypass_timestamp_check {
-
             // Check start,end,cliff timestamp validity.
             if !time_check(now, start_ts, end_ts, cliff) {
                 emit!(CreateVestingEvent {
@@ -307,6 +510,120 @@ pub mod spl_token_timelock {
 /// Context Structs
 /// --------------------------------
 
+/* Initialize context */
+// Accounts for Initialize.
+#[derive(Accounts)]
+#[instruction(config_bump: u8, payer_token_vault_bump: u8)]
+pub struct Initialize<'info> {
+
+    /// The Initializer, the signer and fee payer.
+    #[account(mut)]
+    pub signer: Signer<'info>,
+
+    /// The pubkey of account that have permission to invoke the create_vesting_from_vault instruction.
+    pub authority: AccountInfo<'info>,
+
+    /// Token mint.
+    pub mint: Account<'info, Mint>,
+    
+    /// The token vault account for payer (PDA).
+    #[account(
+        mut,
+        seeds = [config.to_account_info().key.as_ref()],
+        bump = payer_token_vault_bump,
+        constraint = payer_token_vault.mint == mint.to_account_info().key() @ErrorCode::InvalidMintMismatch,
+        constraint = payer_token_vault.owner == payer_token_vault.to_account_info().key() @ErrorCode::InvalidTokenVaultMismatch,
+    )]
+    pub payer_token_vault: Account<'info, TokenAccount>,
+
+    /// The account for saving configuration (PDA).
+    #[account(
+        init, payer = signer,
+        seeds = [b"gyc_timelock".as_ref()],
+        bump = config_bump
+    )]
+    pub config: Box<Account<'info, Config>>,
+
+    /// System program.
+    pub system_program: Program<'info, System>,
+}
+
+/* CreateVestingFromVault context */
+// Accounts for CreateVestingFromVault.
+#[derive(Accounts)]
+#[instruction(total_amount: u64, nonce: u8)]
+pub struct CreateVestingFromVault<'info> {
+
+    /// The account of caller that must have permission to invoke this instruction.
+    #[account(mut)]
+    pub signer: Signer<'info>,
+
+    /// The payer token vault account (PDA).
+    #[account(
+        mut,
+        seeds = [config.to_account_info().key.as_ref()],
+        bump = config.payer_token_vault_bump,
+        constraint = total_amount > 0 @ErrorCode::InvalidDepositAmount,
+        constraint = payer_token_vault.mint == config.mint @ErrorCode::InvalidMintMismatch,
+        constraint = payer_token_vault.owner == payer_token_vault.to_account_info().key() @ErrorCode::InvalidTokenVaultMismatch,
+    )]
+    pub payer_token_vault: Account<'info, TokenAccount>,
+
+    /// The account for saving configuration (PDA).
+    #[account(
+        mut,
+        seeds = [b"gyc_timelock".as_ref()],
+        bump = config.config_bump,
+        constraint = config.payer_token_vault == payer_token_vault.to_account_info().key() @ErrorCode::InvalidTokenVaultMismatch,
+        constraint = config.authority == signer.key() @ErrorCode::Unauthorized,
+    )]
+    pub config: Box<Account<'info, Config>>,
+
+    /// the recipient of main account
+    pub recipient: AccountInfo<'info>,
+    /// the recipient of token account
+    #[account(mut)]
+    pub recipient_token: AccountInfo<'info>,
+
+    /// vesting account of Program.
+    #[account(
+        init,
+        payer = signer,
+        owner = id(),
+        rent_exempt = enforce,
+    )]
+    pub vesting: Box<Account<'info, Vesting>>,
+
+    /// escrow vault.
+    #[account(
+        init, payer = signer,
+        seeds = [vesting.to_account_info().key.as_ref()], bump = nonce,
+        owner = token_program.key(),
+        rent_exempt = enforce,
+        token::mint = mint,
+        token::authority = escrow_vault,
+    )]
+    pub escrow_vault: Account<'info, TokenAccount>,
+
+    /// Token mint.
+    pub mint: Account<'info, Mint>,
+
+    /// Token program.
+    pub token_program: Program<'info, Token>,
+
+    /// Associated token program.
+    pub associated_token_program: Program<'info, AssociatedToken>,
+
+    /// System program.
+    pub system_program: Program<'info, System>,
+
+    /// Clock represents network time.
+    pub clock: Sysvar<'info, Clock>,
+
+    ///Rent for rent exempt.
+    pub rent: Sysvar<'info, Rent>,
+}
+
 /* CreateVesting context */
 // Accounts for CreateVesting.
 #[derive(Accounts)]
@@ -413,7 +730,6 @@ pub struct Withdraw<'info> {
 }
 
 /* CancelVesting context */
-
 // Accounts for CancelVesting.
 #[derive(Accounts)]
 pub struct CancelVesting<'info> {
@@ -458,6 +774,10 @@ pub struct CancelVesting<'info> {
     /// Token program.
     pub token_program: Program<'info, Token>,
 }
+
+// --------------------------------
+// PDA Structs
+// --------------------------------
 
 // A struct controls vesting.
 #[account]
@@ -521,6 +841,31 @@ pub struct Vesting {
     pub tge_amount: u64,
     ///Amount to be unlocked per time during linear unlocking
     pub periodic_unlock_amount: u64,
+}
+
+// A struct controls Config.
+#[account]
+pub struct Config {
+    /// The PDA bump of config account.
+    pub config_bump: u8,
+
+    /// The PDA bump of payer token vault account.
+    pub payer_token_vault_bump: u8,
+
+    /// payer token vault account (PDA).
+    pub payer_token_vault: Pubkey,
+
+    /// The account of have permission to invoke CreateVestingFromVault instruction.
+    pub authority: Pubkey,
+
+    /// token mint.
+    pub mint: Pubkey,
+}
+
+impl Default for Config {
+    fn default() -> Config {
+        unsafe { std::mem::zeroed() }
+    }
 }
 
 ///-------------------------------------
@@ -643,4 +988,6 @@ pub enum ErrorCode {
     InvalidGranterMismatch,
     #[msg("The granter token account mismatch.")]
     InvalidGranterTokenMismatch,
+    #[msg("The token vault account mismatch.")]
+    InvalidTokenVaultMismatch,
 }

@@ -22,11 +22,34 @@ declare_id!("7ShzknMhPAUF2Sq8KzHSKxdCBaMMSgnfkttcbTuQamEz");
 pub mod spl_token_timelock {
     use super::*;
 
+    // initialize for create_vesting_from_vault instruction.
+    /**
+     * @param ctx : context of initialize.
+     * @param config_bump : The PDA bump of config account.
+     * @param payment_vault_bump : The PDA bump of payment vault token account.
+     */
+    pub fn initialize(
+        ctx: Context<Initialize>,
+        config_bump: u8,
+        payment_vault_bump: u8,
+    ) -> ProgramResult {
+
+        let config = &mut ctx.accounts.config;
+        config.payment_vault = ctx.accounts.payment_vault.to_account_info().key();
+        config.payment_vault_bump = payment_vault_bump;
+        config.authority = *ctx.accounts.authority.key;
+        config.mint = ctx.accounts.mint.to_account_info().key();
+        config.config_bump = config_bump;
+
+        Ok(())
+    }
+
     // Create vesting.
     /**
-     * @param ctx : context of Create vesting.
+     * @param ctx : context of create vesting.
      * @param total_amount : The starting balance of this vesting account, i.e., how much was originally deposited.
-     * @param nonce : Signer nonce.
+     * @param escrow_vault_bump : The escrow vault bump.
+     * @param vesting_bump : The vesting bump.
      * @param vesting_id : The vesting id.
      * @param vesting_name : The vesting name.
      * @param investor_wallet_address : The investor wallet address.
@@ -41,7 +64,8 @@ pub mod spl_token_timelock {
     pub fn create_vesting(
         ctx: Context<CreateVesting>,
         total_amount: u64,
-        nonce: u8,
+        escrow_vault_bump: u8,
+        vesting_bump: u8,
         vesting_id: u64,
         vesting_name: [u8; 32],
         investor_wallet_address: [u8; 64],
@@ -53,11 +77,10 @@ pub mod spl_token_timelock {
         tge_release_rate: u64,
         bypass_timestamp_check: bool,
     ) -> ProgramResult {
-        msg!("Initializing SPL token stream");
+        msg!("create vesting");
 
         let now = ctx.accounts.clock.unix_timestamp as u64;
         if !bypass_timestamp_check {
-
             // Check start,end,cliff timestamp validity.
             if !time_check(now, start_ts, end_ts, cliff) {
                 emit!(CreateVestingEvent {
@@ -106,7 +129,7 @@ pub mod spl_token_timelock {
         // and if not, create an associated token account for the recipient.
         if ctx.accounts.recipient_token.data_is_empty() {
             let cpi_accounts = Create {
-                payer: ctx.accounts.granter.to_account_info(),
+                payer: ctx.accounts.signer.to_account_info(),
                 associated_token: ctx.accounts.recipient_token.clone(),
                 authority: ctx.accounts.recipient.to_account_info(),
                 rent: ctx.accounts.rent.to_account_info(),
@@ -125,8 +148,9 @@ pub mod spl_token_timelock {
         let vesting = &mut ctx.accounts.vesting;
         vesting.magic = 0x544D4C4B;
         vesting.version = 1;
-        vesting.nonce = nonce;
-        vesting.vesting_id = vesting_id;
+        vesting.escrow_vault_bump = escrow_vault_bump;
+        vesting.vesting_bump = vesting_bump;
+        vesting.vesting_id = vesting_id.clone();
         vesting.vesting_name = vesting_name.clone();
         vesting.investor_wallet_address = investor_wallet_address.clone();
 
@@ -134,8 +158,11 @@ pub mod spl_token_timelock {
         vesting.remaining_amount = total_amount;
         vesting.total_amount = total_amount;
 
-        vesting.granter = *ctx.accounts.granter.to_account_info().key;
-        vesting.granter_token = *ctx.accounts.granter_token.to_account_info().key;
+        // vesting.granter = *ctx.accounts.granter.to_account_info().key;
+        // vesting.granter_token = *ctx.accounts.granter_token.to_account_info().key;
+        vesting.granter = ctx.accounts.payment_vault.to_account_info().key();
+        vesting.granter_token = ctx.accounts.payment_vault.to_account_info().key();
+
         vesting.recipient = *ctx.accounts.recipient.to_account_info().key;
         vesting.recipient_token = *ctx.accounts.recipient_token.key;
         vesting.mint = *ctx.accounts.mint.to_account_info().key;
@@ -180,12 +207,18 @@ pub mod spl_token_timelock {
 
         // Transfer tokens into the escrow vault.
         let cpi_accounts = Transfer {
-            from: ctx.accounts.granter_token.to_account_info(),
+            from: ctx.accounts.payment_vault.to_account_info(),
             to: ctx.accounts.escrow_vault.to_account_info(),
-            authority: ctx.accounts.granter.to_account_info(),
+            authority: ctx.accounts.payment_vault.to_account_info(),
         };
+
+        let config = &ctx.accounts.config;
+
+        let seeds = &[config.to_account_info().key.as_ref(), &[config.payment_vault_bump]];
+        let signer = &[&seeds[..]];
+
         let cpi_program = ctx.accounts.token_program.to_account_info();
-        let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts);
+        let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts).with_signer(signer);
         token::transfer(cpi_ctx, total_amount)?;
 
         emit!(CreateVestingEvent {
@@ -224,7 +257,7 @@ pub mod spl_token_timelock {
 
         // Transfer funds out.
         let vesting = &mut ctx.accounts.vesting;
-        let seeds = &[vesting.to_account_info().key.as_ref(), &[vesting.nonce]];
+        let seeds = &[vesting.to_account_info().key.as_ref(), &[vesting.escrow_vault_bump]];
         let signer = &[&seeds[..]];
         let cpi_accounts = Transfer {
             from: ctx.accounts.escrow_vault.to_account_info(),
@@ -268,7 +301,7 @@ pub mod spl_token_timelock {
 
         let seeds = &[
             ctx.accounts.vesting.to_account_info().key.as_ref(),
-            &[ctx.accounts.vesting.nonce],
+            &[ctx.accounts.vesting.escrow_vault_bump],
         ];
         let signer = &[&seeds[..]];
 
@@ -276,7 +309,7 @@ pub mod spl_token_timelock {
             // Transfer funds out.
             let cpi_accounts = Transfer {
                 from: ctx.accounts.escrow_vault.to_account_info(),
-                to: ctx.accounts.granter_token.to_account_info(),
+                to: ctx.accounts.payment_vault.to_account_info(),
                 authority: ctx.accounts.escrow_vault.to_account_info(),
             };
             let cpi_program = ctx.accounts.token_program.to_account_info();
@@ -287,7 +320,7 @@ pub mod spl_token_timelock {
         // Close escrow vault account.
         let cpi_accounts = CloseAccount {
             account: ctx.accounts.escrow_vault.to_account_info(),
-            destination: ctx.accounts.granter_token.to_account_info(),
+            destination: ctx.accounts.payment_vault.to_account_info(),
             authority: ctx.accounts.escrow_vault.to_account_info(),
         };
         let cpi_program = ctx.accounts.token_program.to_account_info();
@@ -307,24 +340,82 @@ pub mod spl_token_timelock {
 /// Context Structs
 /// --------------------------------
 
+/* Initialize context */
+// Accounts for Initialize.
+#[derive(Accounts)]
+#[instruction(config_bump: u8, payment_vault_bump: u8)]
+pub struct Initialize<'info> {
+
+    /// The Initializer, the signer and fee payer.
+    #[account(mut)]
+    pub signer: Signer<'info>,
+
+    /// The pubkey of account that have permission to invoke the create_vesting_from_vault instruction.
+    pub authority: AccountInfo<'info>,
+
+    /// Token mint.
+    pub mint: Account<'info, Mint>,
+
+    /// The payment vault token account.
+    #[account(
+        init, payer = signer,
+        seeds = [config.to_account_info().key.as_ref()], bump = payment_vault_bump,
+        rent_exempt = enforce,
+        token::mint = mint,
+        token::authority = payment_vault,
+    )]
+    pub payment_vault: Account<'info, TokenAccount>,
+
+    /// The account for saving configuration (PDA).
+    #[account(
+        init, payer = signer,
+        seeds = [b"gyc_timelock".as_ref()],
+        bump = config_bump,
+        owner = id(),
+        rent_exempt = enforce,
+    )]
+    pub config: Box<Account<'info, Config>>,
+
+    /// Token program.
+    pub token_program: Program<'info, Token>,
+
+    /// Associated token program.
+    pub associated_token_program: Program<'info, AssociatedToken>,
+
+    /// System program.
+    pub system_program: Program<'info, System>,
+
+    ///Rent for rent exempt.
+    pub rent: Sysvar<'info, Rent>,
+}
+
 /* CreateVesting context */
 // Accounts for CreateVesting.
 #[derive(Accounts)]
-#[instruction(total_amount: u64, nonce: u8)]
+#[instruction(total_amount: u64, escrow_vault_bump: u8, vesting_bump: u8, vesting_id: u64)]
 pub struct CreateVesting<'info> {
-    /// Granter of vesting.
-    pub granter: Signer<'info>,
 
-    /// Granter's token.
+    /// The account of caller that must have permission to invoke this instruction.
+    #[account(mut)]
+    pub signer: Signer<'info>,
+
+    /// The payment vault token account.
     #[account(
         mut,
-        constraint = granter_token.amount >= total_amount @ErrorCode::InsufficientDepositAmount,
-        constraint = granter_token.mint == mint.key() @ErrorCode::InvalidMintMismatch,
-        constraint = total_amount > 0 @ErrorCode::InvalidDepositAmount,
-        associated_token::mint = mint,
-        associated_token::authority = granter,
+        seeds = [config.to_account_info().key.as_ref()], bump = config.payment_vault_bump,
+        constraint = payment_vault.mint == config.mint @ErrorCode::InvalidMintMismatch,
     )]
-    pub granter_token: Account<'info, TokenAccount>,
+    pub payment_vault: Account<'info, TokenAccount>,
+
+    /// The account for saving configuration (PDA).
+    #[account(
+        seeds = [b"gyc_timelock".as_ref()],
+        bump = config.config_bump,
+        owner = id(),
+        constraint = config.authority == signer.key() @ErrorCode::Unauthorized,
+    )]
+    pub config: Box<Account<'info, Config>>,
+
     /// the recipient of main account
     pub recipient: AccountInfo<'info>,
     /// the recipient of token account
@@ -334,7 +425,8 @@ pub struct CreateVesting<'info> {
     /// vesting account of Program.
     #[account(
         init,
-        payer = granter,
+        payer = signer,
+        seeds = [ vesting_id.to_string().as_ref(), recipient.key().as_ref()], bump = vesting_bump,
         owner = id(),
         rent_exempt = enforce,
     )]
@@ -342,8 +434,8 @@ pub struct CreateVesting<'info> {
 
     /// escrow vault.
     #[account(
-        init, payer = granter,
-        seeds = [vesting.to_account_info().key.as_ref()], bump = nonce,
+        init, payer = signer,
+        seeds = [vesting.to_account_info().key.as_ref()], bump = escrow_vault_bump,
         owner = token_program.key(),
         rent_exempt = enforce,
         token::mint = mint,
@@ -397,7 +489,7 @@ pub struct Withdraw<'info> {
         mut,
         constraint = escrow_vault.mint == mint.key() @ErrorCode::InvalidMintMismatch,
         seeds = [vesting.to_account_info().key.as_ref()],
-        bump = vesting.nonce,
+        bump = vesting.escrow_vault_bump,
     )]
     pub escrow_vault: Account<'info, TokenAccount>,
 
@@ -413,32 +505,39 @@ pub struct Withdraw<'info> {
 }
 
 /* CancelVesting context */
-
 // Accounts for CancelVesting.
 #[derive(Accounts)]
 pub struct CancelVesting<'info> {
     /// Granter of vesting.
     #[account(mut)]
-    pub granter: Signer<'info>,
+    pub signer: Signer<'info>,
 
-    /// Granter's token.
+    /// The payment vault token account.
     #[account(
         mut,
-        constraint = granter_token.mint == mint.key()  @ErrorCode::InvalidMintMismatch,
-        associated_token::mint = mint,
-        associated_token::authority = granter,
+        seeds = [config.to_account_info().key.as_ref()], bump = config.payment_vault_bump,
+        constraint = payment_vault.mint == config.mint @ErrorCode::InvalidMintMismatch,
     )]
-    pub granter_token: Account<'info, TokenAccount>,
+    pub payment_vault: Account<'info, TokenAccount>,
+
+    /// The account for saving configuration (PDA).
+    #[account(
+        seeds = [b"gyc_timelock".as_ref()],
+        bump = config.config_bump,
+        owner = id(),
+        constraint = config.authority == signer.key() @ErrorCode::Unauthorized,
+    )]
+    pub config: Box<Account<'info, Config>>,
 
     /// Vesting.
     #[account(
         mut,
-        close = granter,
+        close = signer,
         owner = id() @ErrorCode::InvalidVestingOwner,
         constraint = vesting.magic == 0x544D4C4B @ErrorCode::InvalidMagic,
         constraint = vesting.escrow_vault == escrow_vault.key() @ErrorCode::InvalidEscrowVaultMismatch,
-        constraint = vesting.granter == granter.key() @ErrorCode::InvalidGranterMismatch,
-        constraint = vesting.granter_token == granter_token.key() @ErrorCode::InvalidGranterTokenMismatch,
+        constraint = vesting.granter == payment_vault.to_account_info().key() @ErrorCode::InvalidGranterMismatch,
+        constraint = vesting.granter_token == payment_vault.to_account_info().key() @ErrorCode::InvalidGranterTokenMismatch,
     )]
     pub vesting: Box<Account<'info, Vesting>>,
 
@@ -447,7 +546,7 @@ pub struct CancelVesting<'info> {
         mut,
         constraint = escrow_vault.mint == mint.key()  @ErrorCode::InvalidMintMismatch,
         seeds = [vesting.to_account_info().key.as_ref()],
-        bump = vesting.nonce,
+        bump = vesting.escrow_vault_bump,
     )]
     pub escrow_vault: Account<'info, TokenAccount>,
 
@@ -459,15 +558,21 @@ pub struct CancelVesting<'info> {
     pub token_program: Program<'info, Token>,
 }
 
+// --------------------------------
+// PDA Structs
+// --------------------------------
+
 // A struct controls vesting.
 #[account]
 pub struct Vesting {
     /// Magic bytes, always fill the string "TMLK"(timelock)
     pub magic: u32,
-    ///contract version
+    /// contract version
     pub version: u32,
-    /// Signer nonce.
-    pub nonce: u8,
+    /// The escrow vault bump.
+    pub escrow_vault_bump: u8,
+    /// Vesting bump.
+    pub vesting_bump: u8,
     ///The vesting id
     pub vesting_id: u64,
     ///The vesting name
@@ -521,6 +626,31 @@ pub struct Vesting {
     pub tge_amount: u64,
     ///Amount to be unlocked per time during linear unlocking
     pub periodic_unlock_amount: u64,
+}
+
+// A struct controls Config.
+#[account]
+pub struct Config {
+    /// The PDA bump of config account.
+    pub config_bump: u8,
+
+    /// The PDA bump of payment vault token account.
+    pub payment_vault_bump: u8,
+
+    /// The payment vault token account (PDA).
+    pub payment_vault: Pubkey,
+
+    /// The account of have permission to invoke CreateVestingFromVault instruction.
+    pub authority: Pubkey,
+
+    /// token mint.
+    pub mint: Pubkey,
+}
+
+impl Default for Config {
+    fn default() -> Config {
+        unsafe { std::mem::zeroed() }
+    }
 }
 
 ///-------------------------------------
@@ -643,4 +773,8 @@ pub enum ErrorCode {
     InvalidGranterMismatch,
     #[msg("The granter token account mismatch.")]
     InvalidGranterTokenMismatch,
+    #[msg("The token vault account mismatch.")]
+    InvalidTokenVaultMismatch,
+    #[msg("The token authority mismatch.")]
+    InvalidTokenAuthorityMismatch,
 }

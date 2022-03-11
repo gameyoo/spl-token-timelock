@@ -90,20 +90,23 @@ describe('spl-token-timelock', () => {
     // Amount to deposit.
     const depositedAmount = new BN(10 * LAMPORTS_PER_SOL);
 
-    let nonce;
+    const vestingId = 100001;
+
     let mint;
-    let granterToken;
     let granter = provider.wallet;
     let recipientToken;
-    let escrowVault;
-
     let config;
-    let config_bump;
+    let configBump;
+    let paymentVault;
+    let paymentVaultBump;
+    let vesting;
+    let vestingBump;
+    let escrowVault;
+    let escrowVaultBump;
 
     const recipient = Keypair.generate();
-    const vesting = Keypair.generate();
 
-    before(async() => {
+    before(async () => {
 
         // Create token mint.
         mint = await common.createMint(
@@ -112,38 +115,24 @@ describe('spl-token-timelock', () => {
             DECIMALS
         );
 
-        /*
-            Create associated token account for granter.
-        */
-        granterToken = await Token.getAssociatedTokenAddress(
-            ASSOCIATED_TOKEN_PROGRAM_ID,
-            TOKEN_PROGRAM_ID,
-            mint,
-            granter.publicKey
+        [config, configBump] = await PublicKey.findProgramAddress(
+            [Buffer.from("gyc_timelock")],
+            program.programId
         );
 
-        await createAssociatedTokenAccount(
-            provider,
-            mint,
-            granterToken,
-            granter.publicKey,
-            granter.publicKey,
-            granter.payer
+        [paymentVault, paymentVaultBump] = await PublicKey.findProgramAddress(
+            [config.toBuffer()],
+            program.programId
         );
 
-        // Mint some tokens to granter.
-        await mintTo(
-            provider,
-            mint,
-            granterToken,
-            granter.publicKey,
-            10 * LAMPORTS_PER_SOL,
-            granter.payer
+        [vesting, vestingBump] = await PublicKey.findProgramAddress(
+            [vestingId.toString(), recipient.publicKey.toBuffer()],
+            program.programId
         );
 
         // Get escrow vault account address, it's PDA.
-        [escrowVault, nonce] = await PublicKey.findProgramAddress(
-            [vesting.publicKey.toBuffer()],
+        [escrowVault, escrowVaultBump] = await PublicKey.findProgramAddress(
+            [vesting.toBuffer()],
             program.programId
         );
 
@@ -156,31 +145,71 @@ describe('spl-token-timelock', () => {
         );
 
         console.log("\nBefore:");
-        console.log("programId", program.programId.toBase58());
-        console.log("granter wallet:", granter.publicKey.toBase58());
-        console.log("granter token:", granterToken.toBase58());
-        console.log("escrowVault (vesting):", vesting.publicKey.toBase58());
-        console.log("escrowVault token:", escrowVault.toBase58());
-        console.log("recipient wallet:", recipient.publicKey.toBase58());
-        console.log("recipient token:", recipientToken.toBase58());
-        console.log("mint:", mint.toBase58());
-        console.log("nonce:", nonce);
+        console.log(`programId: ${program.programId.toBase58()}
+vestingId: ${vestingId}
+signer wallet: ${granter.publicKey.toBase58()}
+mint: ${mint.toBase58()}
+config: ${mint.toBase58()}
+configBump: ${configBump}
+paymentVault: ${paymentVault.toBase58()}
+paymentVaultBump: ${paymentVaultBump}
+vesting: ${vesting.toBase58()}
+vestingBump: ${vestingBump}
+escrowVault: ${escrowVault.toBase58()}
+escrowVaultBump: ${escrowVaultBump}
+recipient wallet: ${recipient.publicKey.toBase58()}
+recipient token: ${recipientToken.toBase58()}
+`);
 
-        [config, config_bump] = await PublicKey.findProgramAddress(
-
-        );
     });
 
-    it("Initialize", async() => {
+    it("Initialize", async () => {
 
-        console.log(`Initialize:`);
+        console.log(`Initialize: `);
 
+        const tx = await program.rpc.initialize(
+            configBump,
+            paymentVaultBump, {
+            accounts: {
+                signer: granter.publicKey,
+                authority: granter.publicKey,
+                mint: mint,
+                paymentVault: paymentVault,
+                config: config,
+                tokenProgram: TOKEN_PROGRAM_ID,
+                associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+                systemProgram: SystemProgram.programId,
+                rent: SYSVAR_RENT_PUBKEY,
+            },
+            signer: [granter.payer]
+        });
 
-    })
+        console.log("tx: ", tx);
 
-    it("Create vesting", async() => {
+        // Mint some tokens to granter.
+        await mintTo(
+            provider,
+            mint,
+            paymentVault,
+            granter.publicKey,
+            10 * LAMPORTS_PER_SOL,
+            granter.payer
+        );
 
-        console.log("\nCreate vesting:");
+        const _paymentVault = await program.provider.connection.getAccountInfo(
+            paymentVault
+        );
+
+        const _paymentVaultData = common.token.parseTokenAccountData(
+            _paymentVault.data
+        );
+
+        console.log(`PaymentVault Token Amount: ${_paymentVaultData.amount}`);
+    });
+
+    it("Create vesting", async () => {
+
+        console.log(`Create vesting: `);
 
         // Listen CreateVesting event of on-chain program.
         let listener = null;
@@ -195,8 +224,9 @@ describe('spl-token-timelock', () => {
         let investor_wallet_address = nacl.util.decodeUTF8("0x519d6DCdf1acbFD8774751F1043deeeA8778ef4a");
         const tx = await program.rpc.createVesting(
             depositedAmount,
-            nonce,
-            new BN(1),
+            escrowVaultBump,
+            vestingBump,
+            new BN(vestingId),
             vesting_name,
             investor_wallet_address,
             start,
@@ -206,22 +236,23 @@ describe('spl-token-timelock', () => {
             new BN(10),
             new BN(20),
             false, {
-                accounts: {
-                    granter: granter.publicKey,
-                    mint: mint,
-                    granterToken: granterToken,
-                    recipient: recipient.publicKey,
-                    recipientToken: recipientToken,
-                    vesting: vesting.publicKey,
-                    escrowVault: escrowVault,
-                    tokenProgram: TOKEN_PROGRAM_ID,
-                    associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
-                    systemProgram: SystemProgram.programId,
-                    clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
-                    rent: SYSVAR_RENT_PUBKEY
-                },
-                signers: [granter.payer, vesting]
-            }
+            accounts: {
+                signer: granter.publicKey,
+                paymentVault: paymentVault,
+                config: config,
+                recipient: recipient.publicKey,
+                recipientToken: recipientToken,
+                vesting: vesting,
+                escrowVault: escrowVault,
+                mint: mint,
+                tokenProgram: TOKEN_PROGRAM_ID,
+                associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+                systemProgram: SystemProgram.programId,
+                clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
+                rent: SYSVAR_RENT_PUBKEY
+            },
+            signers: [granter.payer]
+        }
         );
 
         console.log("tx: ", tx);
@@ -230,24 +261,24 @@ describe('spl-token-timelock', () => {
             escrowVault
         );
 
-        const _granterToken = await program.provider.connection.getAccountInfo(
-            granterToken
+        const _paymentVault = await program.provider.connection.getAccountInfo(
+            paymentVault
         );
 
         const _vesting = await program.provider.connection.getAccountInfo(
-            vesting.publicKey
+            vesting
         );
 
         const _escrowVaultTokenData = common.token.parseTokenAccountData(
             _escrowVaultToken.data
         );
 
-        const _granterTokenData = common.token.parseTokenAccountData(
-            _granterToken.data
+        const _paymentVaultData = common.token.parseTokenAccountData(
+            _paymentVault.data
         );
 
         console.log(
-            "deposited during contract creation: ",
+            "deposited during vesting creation: ",
             depositedAmount.toNumber(),
             _escrowVaultTokenData.amount
         );
@@ -256,14 +287,15 @@ describe('spl-token-timelock', () => {
         assert.ok(depositedAmount.toNumber() === _escrowVaultTokenData.amount);
 
         await program.removeEventListener(listener);
+
     });
 
-    it("Withdraw", async() => {
+    it("Withdraw", async () => {
 
         await sleep(10000);
 
-        console.log("Withdraw:");
-        console.log("recipient token", recipientToken.toBase58());
+        console.log(`Withdraw: `);
+        console.log(`recipient token: ${recipientToken.toBase58()}`);
 
         // Listen withdraw event of on-chain program.
         let listener = null;
@@ -272,7 +304,6 @@ describe('spl-token-timelock', () => {
             console.log("event data: ", event.data.toNumber());
             console.log("event status: ", event.status);
         });
-
 
         const oldEscrowVaultAccountInfo = await program.provider.connection.getAccountInfo(
             escrowVault
@@ -298,29 +329,22 @@ describe('spl-token-timelock', () => {
 
         const withdrawAmount = new BN(2 * LAMPORTS_PER_SOL);
 
-        console.log(
-            "vesting",
-            vesting.publicKey.toBase58(),
-            "escrowVault",
-            escrowVault.toBase58()
-        );
-
-        console.log("seed", vesting.publicKey.toBuffer());
-        console.log("vesting", vesting.publicKey.toBase58());
+        console.log(`vesting: ${vesting.toBase58()}
+escrowVault: ${escrowVault.toBase58()}`);
 
         // Withdraw from escrow vault account by Invoke withdraw instruction of on-chain program.
         const tx = await program.rpc.withdraw(
             withdrawAmount, {
-                accounts: {
-                    recipientToken: recipientToken,
-                    vesting: vesting.publicKey,
-                    escrowVault: escrowVault,
-                    mint: mint,
-                    tokenProgram: TOKEN_PROGRAM_ID,
-                    clock: anchor.web3.SYSVAR_CLOCK_PUBKEY
-                },
-                signers: []
-            }
+            accounts: {
+                recipientToken: recipientToken,
+                vesting: vesting,
+                escrowVault: escrowVault,
+                mint: mint,
+                tokenProgram: TOKEN_PROGRAM_ID,
+                clock: anchor.web3.SYSVAR_CLOCK_PUBKEY
+            },
+            signers: []
+        }
         );
 
         console.log("tx: ", tx);
@@ -329,7 +353,7 @@ describe('spl-token-timelock', () => {
             Get and print updated state of the accounts.
         */
         const _vesting = await program.provider.connection.getAccountInfo(
-            vesting.publicKey
+            vesting
         );
 
         const newRecipientTokenAccountInfo = await program.provider.connection.getAccountInfo(
@@ -351,26 +375,9 @@ describe('spl-token-timelock', () => {
             ).amount;
         }
 
-        console.log(
-            "depositedAmount",
-            depositedAmount.toNumber(),
-            "withdrawn",
-            withdrawAmount.toNumber()
-        );
-
-        console.log(
-            "escrowVault token balance: previous: ",
-            oldEscrowVaultAmount,
-            "after: ",
-            newEscrowVaultAmount
-        );
-
-        console.log(
-            "recipient token balance: previous: ",
-            oldRecipientTokenAmount,
-            "after: ",
-            newRecipientTokenAmount
-        );
+        console.log(`depositedAmount: ${depositedAmount.toNumber()} withdrawn: ${withdrawAmount.toNumber()}`);
+        console.log(`escrowVault token balance: previous: ${oldEscrowVaultAmount} after: ${newEscrowVaultAmount}`);
+        console.log(`recipient token balance: previous: ${oldRecipientTokenAmount} after: ${newRecipientTokenAmount}`);
 
         // Verify.
         assert.ok(
@@ -380,7 +387,7 @@ describe('spl-token-timelock', () => {
         await program.removeEventListener(listener);
     });
 
-    it("Cancel", async() => {
+    it("Cancel", async () => {
 
         await sleep(12000);
 
@@ -392,16 +399,15 @@ describe('spl-token-timelock', () => {
             console.log("event status: ", event.status);
         });
 
-
         const oldBalance = await provider.connection.getBalance(granter.publicKey);
 
-        console.log("\nCancel:");
-        const oldGranterAccountInfo = await program.provider.connection.getAccountInfo(
-            granterToken
+        console.log(`Cancel: `);
+        const oldPaymentVaultInfo = await program.provider.connection.getAccountInfo(
+            paymentVault
         );
 
-        const oldGranterAmount = common.token.parseTokenAccountData(
-            oldGranterAccountInfo.data
+        const oldPaymentVaultAmount = common.token.parseTokenAccountData(
+            oldPaymentVaultInfo.data
         ).amount;
 
         const oldEscrowVaultAccountInfo = await program.provider.connection.getAccountInfo(
@@ -429,9 +435,10 @@ describe('spl-token-timelock', () => {
         // Cancel vesting by Invoke cancel instruction of on-chain program.
         const tx = await program.rpc.cancel({
             accounts: {
-                granter: granter.publicKey,
-                granterToken: granterToken,
-                vesting: vesting.publicKey,
+                signer: granter.publicKey,
+                paymentVault: paymentVault,
+                config: config,
+                vesting: vesting,
                 escrowVault: escrowVault,
                 mint: mint,
                 tokenProgram: TOKEN_PROGRAM_ID
@@ -463,36 +470,26 @@ describe('spl-token-timelock', () => {
             newRecipientTokenAccountInfo.data
         ).amount;
 
-        const newGranterAccountInfo = await program.provider.connection.getAccountInfo(
-            granterToken
+        const newPaymentVaultInfo = await program.provider.connection.getAccountInfo(
+            paymentVault
         );
 
-        const newGranterAmount = common.token.parseTokenAccountData(
-            newGranterAccountInfo.data
+        const newPaymentVaultAmount = common.token.parseTokenAccountData(
+            newPaymentVaultInfo.data
         ).amount;
 
-        console.log(
-            "old granter",
-            oldGranterAmount,
-            "old recipientToken",
-            oldRecipientTokenAmount,
-            "old escrowVault",
-            oldEscrowVaultAmount
-        );
+        console.log(`oldPaymentVault: ${oldPaymentVaultAmount}
+old recipientToken: ${oldRecipientTokenAmount}
+old escrowVault: ${oldEscrowVaultAmount}`);
 
-        console.log(
-            "new granter",
-            newGranterAmount,
-            "new recipientToken",
-            newRecipientTokenAmount,
-            "new escrowVault",
-            newEscrowVaultAmount
-        );
+        console.log(`newPaymentVault: ${newPaymentVaultAmount}
+new recipientToken: ${newRecipientTokenAmount}
+new escrowVault: ${newEscrowVaultAmount}`);
 
         const newBalance = await provider.connection.getBalance(granter.publicKey);
         console.log("Returned:", newBalance - oldBalance);
         assert.ok(newEscrowVaultAmount === null);
-        assert.ok((new BN(newRecipientTokenAmount + newGranterAmount)).eq(depositedAmount));
+        assert.ok((new BN(newRecipientTokenAmount + newPaymentVaultAmount)).eq(depositedAmount));
 
         await program.removeEventListener(listener);
 

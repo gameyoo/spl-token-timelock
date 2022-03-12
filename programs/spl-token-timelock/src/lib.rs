@@ -22,7 +22,7 @@ declare_id!("7ShzknMhPAUF2Sq8KzHSKxdCBaMMSgnfkttcbTuQamEz");
 pub mod spl_token_timelock {
     use super::*;
 
-    // initialize for create_vesting_from_vault instruction.
+    // initialize program.
     /**
      * @param ctx : context of initialize.
      * @param config_bump : The PDA bump of config account.
@@ -40,6 +40,11 @@ pub mod spl_token_timelock {
         config.authority = *ctx.accounts.authority.key;
         config.mint = ctx.accounts.mint.to_account_info().key();
         config.config_bump = config_bump;
+
+        emit!(InitializeEvent {
+            data: 0,
+            status: "ok".to_string(),
+        });
 
         Ok(())
     }
@@ -158,8 +163,6 @@ pub mod spl_token_timelock {
         vesting.remaining_amount = total_amount;
         vesting.total_amount = total_amount;
 
-        // vesting.granter = *ctx.accounts.granter.to_account_info().key;
-        // vesting.granter_token = *ctx.accounts.granter_token.to_account_info().key;
         vesting.granter = ctx.accounts.payment_vault.to_account_info().key();
         vesting.granter_token = ctx.accounts.payment_vault.to_account_info().key();
 
@@ -231,7 +234,7 @@ pub mod spl_token_timelock {
 
     // Withdraw.
     /**
-     * @param ctx : context of Withdraw.
+     * @param ctx : context of withdraw.
      * @param amount : The number of withdraw wanted.
      */
     pub fn withdraw(ctx: Context<Withdraw>, amount: u64) -> ProgramResult {
@@ -340,23 +343,23 @@ pub mod spl_token_timelock {
 /// Context Structs
 /// --------------------------------
 
-/* Initialize context */
-// Accounts for Initialize.
+/* initialize context */
+// Accounts for initialize.
 #[derive(Accounts)]
 #[instruction(config_bump: u8, payment_vault_bump: u8)]
 pub struct Initialize<'info> {
 
-    /// The Initializer, the signer and fee payer.
+    /// The Initializer, the signer and fee payer. & The pubkey of account that have permission to invoke create_vesting and cancel instruction.
     #[account(mut)]
     pub signer: Signer<'info>,
 
-    /// The pubkey of account that have permission to invoke the create_vesting_from_vault instruction.
+    /// The pubkey of account that have permission to invoke the create_vesting instruction.
     pub authority: AccountInfo<'info>,
 
     /// Token mint.
     pub mint: Account<'info, Mint>,
 
-    /// The payment vault token account.
+    /// The payment vault token account (PDA).
     #[account(
         init, payer = signer,
         seeds = [config.to_account_info().key.as_ref()], bump = payment_vault_bump,
@@ -389,13 +392,13 @@ pub struct Initialize<'info> {
     pub rent: Sysvar<'info, Rent>,
 }
 
-/* CreateVesting context */
-// Accounts for CreateVesting.
+/* create_vesting context */
+// Accounts for create_vesting.
 #[derive(Accounts)]
 #[instruction(total_amount: u64, escrow_vault_bump: u8, vesting_bump: u8, vesting_id: u64)]
 pub struct CreateVesting<'info> {
 
-    /// The account of caller that must have permission to invoke this instruction.
+    /// The account that must have permission to invoke this instruction.
     #[account(mut)]
     pub signer: Signer<'info>,
 
@@ -422,7 +425,7 @@ pub struct CreateVesting<'info> {
     #[account(mut)]
     pub recipient_token: AccountInfo<'info>,
 
-    /// vesting account of Program.
+    /// vesting account.
     #[account(
         init,
         payer = signer,
@@ -462,19 +465,19 @@ pub struct CreateVesting<'info> {
     pub rent: Sysvar<'info, Rent>,
 }
 
-/* Withdraw context */
+/* withdraw context */
 
-// Accounts for Withdraw.
+// Accounts for withdraw.
 #[derive(Accounts)]
 pub struct Withdraw<'info> {
-    /// the recipient of token account
+    /// the recipient of token account.
     #[account(
         mut,
         constraint = recipient_token.mint == mint.key() @ErrorCode::InvalidMintMismatch,
     )]
     pub recipient_token: Account<'info, TokenAccount>,
 
-    /// Vesting.
+    /// vesting account.
     #[account(
         mut,
         owner = id() @ErrorCode::InvalidVestingOwner,
@@ -504,11 +507,11 @@ pub struct Withdraw<'info> {
     pub clock: Sysvar<'info, Clock>,
 }
 
-/* CancelVesting context */
-// Accounts for CancelVesting.
+/* cancel context */
+// Accounts for cancel.
 #[derive(Accounts)]
 pub struct CancelVesting<'info> {
-    /// Granter of vesting.
+    /// signer or granter of vesting.
     #[account(mut)]
     pub signer: Signer<'info>,
 
@@ -529,7 +532,7 @@ pub struct CancelVesting<'info> {
     )]
     pub config: Box<Account<'info, Config>>,
 
-    /// Vesting.
+    /// vesting.
     #[account(
         mut,
         close = signer,
@@ -565,66 +568,66 @@ pub struct CancelVesting<'info> {
 // A struct controls vesting.
 #[account]
 pub struct Vesting {
-    /// Magic bytes, always fill the string "TMLK"(timelock)
+    /// Magic bytes, always fill the string "TMLK"(timelock).
     pub magic: u32,
-    /// contract version
+    /// Contract version.
     pub version: u32,
     /// The escrow vault bump.
     pub escrow_vault_bump: u8,
     /// Vesting bump.
     pub vesting_bump: u8,
-    ///The vesting id
+    /// The vesting id.
     pub vesting_id: u64,
-    ///The vesting name
+    /// The vesting name.
     pub vesting_name: [u8; 32],
-    /// The investor wallet address
+    /// The investor wallet address.
     pub investor_wallet_address: [u8; 64],
 
-    /// Amount of funds withdrawn
+    /// Amount of funds withdrawn.
     pub withdrawn_amount: u64,
-    /// Remaining amount of the tokens in the escrow account
+    /// Remaining amount of the tokens in the escrow account.
     pub remaining_amount: u64,
     /// The starting balance of this vesting account, i.e., how much was
     /// originally deposited.
     pub total_amount: u64,
 
-    /// Pubkey of the granter main account (signer)
+    /// Pubkey of the granter main account (signer).
     pub granter: Pubkey,
-    /// Pubkey of the granter token account
+    /// Pubkey of the granter token account.
     pub granter_token: Pubkey,
-    /// Pubkey of the recipient main account
+    /// Pubkey of the recipient main account.
     pub recipient: Pubkey,
-    /// Pubkey of the recipient token account
+    /// Pubkey of the recipient token account.
     pub recipient_token: Pubkey,
-    /// Pubkey of the token mint
+    /// Pubkey of the token mint.
     pub mint: Pubkey,
-    /// Pubkey of the escrow vault account holding the locked tokens
+    /// Pubkey of the escrow vault account holding the locked tokens.
     pub escrow_vault: Pubkey,
 
-    /// Timestamp when stream was created
+    /// Timestamp when stream was created.
     pub created_ts: u64,
-    /// Timestamp when the tokens start vesting
+    /// Timestamp when the tokens start vesting.
     pub start_ts: u64,
-    /// Timestamp when all tokens are fully vested
+    /// Timestamp when all tokens are fully vested.
     pub end_ts: u64,
-    /// Internal billing time
+    /// Internal billing time.
     pub accounting_ts: u64,
-    /// Timestamp of the last withdrawal
+    /// Timestamp of the last withdrawal.
     pub last_withdrawn_at: u64,
 
-    /// Time step (period) in seconds per which the vesting occurs
+    /// Time step (period) in seconds per which the vesting occurs.
     pub period: u64,
-    /// Vesting contract "cliff" timestamp
+    /// Vesting contract "cliff" timestamp.
     pub cliff: u64,
-    /// The rate of amount unlocked at the "cliff" timestamp
+    /// The rate of amount unlocked at the "cliff" timestamp.
     pub cliff_release_rate: u64,
-    /// Amount unlocked at the "cliff" timestamp
+    /// Amount unlocked at the "cliff" timestamp.
     pub cliff_amount: u64,
-    /// The rate of amount unlocked at TGE
+    /// The rate of amount unlocked at TGE.
     pub tge_release_rate: u64,
-    /// Amount unlocked at TGE
+    /// Amount unlocked at TGE.
     pub tge_amount: u64,
-    ///Amount to be unlocked per time during linear unlocking
+    /// Amount to be unlocked per time during linear unlocking.
     pub periodic_unlock_amount: u64,
 }
 
@@ -640,7 +643,7 @@ pub struct Config {
     /// The payment vault token account (PDA).
     pub payment_vault: Pubkey,
 
-    /// The account of have permission to invoke CreateVestingFromVault instruction.
+    /// The account that have permission to invoke create_vesting and cancel instruction instruction.
     pub authority: Pubkey,
 
     /// token mint.
@@ -656,6 +659,14 @@ impl Default for Config {
 ///-------------------------------------
 /// Events
 ///-------------------------------------
+
+// Triggered when initialize.
+#[event]
+pub struct InitializeEvent {
+    pub data: u64,
+    #[index]
+    pub status: String,
+}
 
 // Triggered when create vesting.
 #[event]

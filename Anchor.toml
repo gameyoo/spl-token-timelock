@@ -3,7 +3,7 @@ spl_token_timelock = "7ShzknMhPAUF2Sq8KzHSKxdCBaMMSgnfkttcbTuQamEz"
 [programs.devnet]
 spl_token_timelock = "7ShzknMhPAUF2Sq8KzHSKxdCBaMMSgnfkttcbTuQamEz"
 [programs.mainnet]
-spl_token_timelock = "8e72pYCDaxu3GqMfeQ5r8wFgoZSYk6oua1Qo9XpsZjX"
+spl_token_timelock = "7ShzknMhPAUF2Sq8KzHSKxdCBaMMSgnfkttcbTuQamEz"
 [registry]
 url = "https://anchor.projectserum.com"
 

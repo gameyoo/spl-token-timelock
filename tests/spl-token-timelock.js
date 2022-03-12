@@ -20,8 +20,6 @@ const {
 } = anchor.web3;
 
 const {decode} = require("./layout");
-//const spl_token_timelock = require("../target/types/spl_token_timelock");
-
 
 function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms))

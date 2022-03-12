@@ -19,6 +19,8 @@ const {
     LAMPORTS_PER_SOL
 } = anchor.web3;
 
+const {decode} = require("./layout");
+
 function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms))
 }
@@ -79,10 +81,10 @@ describe('spl-token-timelock', () => {
     const start = new BN(+new Date() / 1000 + 5);
 
     // Timestamp (in seconds) of cliff.
-    const cliff = new BN(+new Date() / 1000 + 30);
+    const cliff = new BN(+new Date() / 1000 + 10);
 
     // Timestamp (in seconds) when the stream/token vesting end, +60 seconds.
-    const end = new BN(+new Date() / 1000 + 60);
+    const end = new BN(+new Date() / 1000 + 30);
 
     // In seconds.
     const period = new BN(1);
@@ -144,7 +146,7 @@ describe('spl-token-timelock', () => {
             recipient.publicKey
         );
 
-        console.log("\nBefore:");
+        console.log(`Before: `);
         console.log(`programId: ${program.programId.toBase58()}
 vestingId: ${vestingId}
 signer wallet: ${granter.publicKey.toBase58()}
@@ -184,7 +186,7 @@ recipient token: ${recipientToken.toBase58()}
             signer: [granter.payer]
         });
 
-        console.log("tx: ", tx);
+        console.log(`tx: ${tx}`);
 
         // Mint some tokens to granter.
         await mintTo(
@@ -255,7 +257,7 @@ recipient token: ${recipientToken.toBase58()}
         }
         );
 
-        console.log("tx: ", tx);
+        console.log(`tx: ${tx}`);
 
         const _escrowVaultToken = await program.provider.connection.getAccountInfo(
             escrowVault
@@ -269,6 +271,26 @@ recipient token: ${recipientToken.toBase58()}
             vesting
         );
 
+        console.log("vesting: ", _vesting);
+        let vesting_data = decode(_vesting.data);
+        //console.log(`vesting_data: ${vesting_data}`);
+        console.log("vesting_data: ", vesting_data);
+        console.log(`
+${vesting_data.granter.toBase58()}
+${vesting_data.granterToken.toBase58()}
+${vesting_data.recipient.toBase58()}
+${vesting_data.recipientToken.toBase58()}
+${vesting_data.mint.toBase58()}
+${vesting_data.escrowVault.toBase58()}
+`);
+
+        // BufferLayout.blob(32, "granter"),
+        // BufferLayout.blob(32, "granterToken"),
+        // BufferLayout.blob(32, "recipient"),
+        // BufferLayout.blob(32, "recipientToken"),
+        // BufferLayout.blob(32, "mint"),
+        // BufferLayout.blob(32, "escrowVault"),
+
         const _escrowVaultTokenData = common.token.parseTokenAccountData(
             _escrowVaultToken.data
         );
@@ -277,11 +299,8 @@ recipient token: ${recipientToken.toBase58()}
             _paymentVault.data
         );
 
-        console.log(
-            "deposited during vesting creation: ",
-            depositedAmount.toNumber(),
-            _escrowVaultTokenData.amount
-        );
+        console.log(`deposited during vesting creation: ${depositedAmount.toNumber()}
+escrowVault: ${_escrowVaultTokenData.amount}`);
 
         // Verify.
         assert.ok(depositedAmount.toNumber() === _escrowVaultTokenData.amount);
@@ -347,7 +366,7 @@ escrowVault: ${escrowVault.toBase58()}`);
         }
         );
 
-        console.log("tx: ", tx);
+        console.log(`tx: ${tx}`);
 
         /*
             Get and print updated state of the accounts.
@@ -355,6 +374,19 @@ escrowVault: ${escrowVault.toBase58()}`);
         const _vesting = await program.provider.connection.getAccountInfo(
             vesting
         );
+
+        console.log("vesting: ", _vesting);
+        let vesting_data = decode(_vesting.data);
+        //console.log(`vesting_data: ${vesting_data}`);
+        console.log("vesting_data: ", vesting_data);
+        console.log(`
+${vesting_data.granter.toBase58()}
+${vesting_data.granterToken.toBase58()}
+${vesting_data.recipient.toBase58()}
+${vesting_data.recipientToken.toBase58()}
+${vesting_data.mint.toBase58()}
+${vesting_data.escrowVault.toBase58()}
+`);
 
         const newRecipientTokenAccountInfo = await program.provider.connection.getAccountInfo(
             recipientToken
@@ -446,7 +478,7 @@ escrowVault: ${escrowVault.toBase58()}`);
             signers: [granter.payer]
         });
 
-        console.log("tx: ", tx);
+        console.log(`tx: ${tx}`);
 
         /*
             Get and print the relevant account information and verify it accordingly.

@@ -144,7 +144,7 @@ describe('spl-token-timelock', () => {
             recipient.publicKey
         );
 
-        console.log("\nBefore:");
+        console.log(`Before: `);
         console.log(`programId: ${program.programId.toBase58()}
 vestingId: ${vestingId}
 signer wallet: ${granter.publicKey.toBase58()}
@@ -184,7 +184,7 @@ recipient token: ${recipientToken.toBase58()}
             signer: [granter.payer]
         });
 
-        console.log("tx: ", tx);
+        console.log(`tx: ${tx}`);
 
         // Mint some tokens to granter.
         await mintTo(
@@ -255,7 +255,7 @@ recipient token: ${recipientToken.toBase58()}
         }
         );
 
-        console.log("tx: ", tx);
+        console.log(`tx: ${tx}`);
 
         const _escrowVaultToken = await program.provider.connection.getAccountInfo(
             escrowVault
@@ -269,6 +269,8 @@ recipient token: ${recipientToken.toBase58()}
             vesting
         );
 
+        console.log("vesting: ", _vesting);
+
         const _escrowVaultTokenData = common.token.parseTokenAccountData(
             _escrowVaultToken.data
         );
@@ -277,11 +279,8 @@ recipient token: ${recipientToken.toBase58()}
             _paymentVault.data
         );
 
-        console.log(
-            "deposited during vesting creation: ",
-            depositedAmount.toNumber(),
-            _escrowVaultTokenData.amount
-        );
+        console.log(`deposited during vesting creation: ${depositedAmount.toNumber()}
+escrowVault: ${_escrowVaultTokenData.amount}`);
 
         // Verify.
         assert.ok(depositedAmount.toNumber() === _escrowVaultTokenData.amount);
@@ -347,7 +346,7 @@ escrowVault: ${escrowVault.toBase58()}`);
         }
         );
 
-        console.log("tx: ", tx);
+        console.log(`tx: ${tx}`);
 
         /*
             Get and print updated state of the accounts.
@@ -355,6 +354,8 @@ escrowVault: ${escrowVault.toBase58()}`);
         const _vesting = await program.provider.connection.getAccountInfo(
             vesting
         );
+
+        console.log("vesting: ", _vesting);
 
         const newRecipientTokenAccountInfo = await program.provider.connection.getAccountInfo(
             recipientToken
@@ -446,7 +447,7 @@ escrowVault: ${escrowVault.toBase58()}`);
             signers: [granter.payer]
         });
 
-        console.log("tx: ", tx);
+        console.log(`tx: ${tx}`);
 
         /*
             Get and print the relevant account information and verify it accordingly.

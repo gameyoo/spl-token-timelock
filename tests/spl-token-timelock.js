@@ -20,6 +20,8 @@ const {
 } = anchor.web3;
 
 const {decode} = require("./layout");
+//const spl_token_timelock = require("../target/types/spl_token_timelock");
+
 
 function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms))
@@ -284,12 +286,8 @@ ${vesting_data.mint.toBase58()}
 ${vesting_data.escrowVault.toBase58()}
 `);
 
-        // BufferLayout.blob(32, "granter"),
-        // BufferLayout.blob(32, "granterToken"),
-        // BufferLayout.blob(32, "recipient"),
-        // BufferLayout.blob(32, "recipientToken"),
-        // BufferLayout.blob(32, "mint"),
-        // BufferLayout.blob(32, "escrowVault"),
+        const vestingAccount = await program.account.vesting.fetch(vesting);
+        console.log("fetch vesting: ", vestingAccount);
 
         const _escrowVaultTokenData = common.token.parseTokenAccountData(
             _escrowVaultToken.data
@@ -387,6 +385,9 @@ ${vesting_data.recipientToken.toBase58()}
 ${vesting_data.mint.toBase58()}
 ${vesting_data.escrowVault.toBase58()}
 `);
+
+        const vestingAccount = await program.account.vesting.fetch(vesting);
+        console.log("fetch vesting: ", vestingAccount);
 
         const newRecipientTokenAccountInfo = await program.provider.connection.getAccountInfo(
             recipientToken

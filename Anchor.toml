@@ -1,14 +1,14 @@
 [programs.localnet]
-spl_token_timelock = "7ShzknMhPAUF2Sq8KzHSKxdCBaMMSgnfkttcbTuQamEz"
+spl_token_timelock = "C529vHX1A5TUoEND6g2XYEiy9CXBUANDXTtXPiDMt7SK"
 [programs.devnet]
-spl_token_timelock = "7ShzknMhPAUF2Sq8KzHSKxdCBaMMSgnfkttcbTuQamEz"
+spl_token_timelock = "C529vHX1A5TUoEND6g2XYEiy9CXBUANDXTtXPiDMt7SK"
 [programs.mainnet]
-spl_token_timelock = "7ShzknMhPAUF2Sq8KzHSKxdCBaMMSgnfkttcbTuQamEz"
+spl_token_timelock = "C529vHX1A5TUoEND6g2XYEiy9CXBUANDXTtXPiDMt7SK"
 [registry]
 url = "https://anchor.projectserum.com"
 
 [provider]
-cluster = "localnet"
+cluster = "devnet"
 wallet = "~/.config/solana/id.json"
 
 [scripts]

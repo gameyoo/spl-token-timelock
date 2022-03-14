@@ -14,9 +14,9 @@ use anchor_spl::{
     token::{self, CloseAccount, Mint, Token, TokenAccount, Transfer},
 };
 
-use spl_token::amount_to_ui_amount;
+//use spl_token::amount_to_ui_amount;
 
-declare_id!("7ShzknMhPAUF2Sq8KzHSKxdCBaMMSgnfkttcbTuQamEz");
+declare_id!("C529vHX1A5TUoEND6g2XYEiy9CXBUANDXTtXPiDMt7SK");
 
 #[program]
 pub mod spl_token_timelock {
@@ -83,6 +83,20 @@ pub mod spl_token_timelock {
         bypass_timestamp_check: bool,
     ) -> ProgramResult {
         msg!("create vesting");
+
+        // msg!("total_amount: {}", total_amount);
+        // msg!("escrow_vault_bump: {}", escrow_vault_bump);
+        // msg!("vesting_bump: {}", vesting_bump);
+        // msg!("vesting_id: {}", vesting_id);
+        // msg!("vesting_name: {:?}", vesting_name);
+        // msg!("investor_wallet_address: {:?}", investor_wallet_address);
+        // msg!("start_ts: {}", start_ts);
+        // msg!("end_ts: {}", end_ts);
+        // msg!("period: {}", period);
+        // msg!("cliff: {}", cliff);
+        // msg!("cliff_release_rate: {}", cliff_release_rate);
+        // msg!("tge_release_rate: {}", tge_release_rate);
+        // msg!("bypass_timestamp_check: {}", bypass_timestamp_check);
 
         let now = ctx.accounts.clock.unix_timestamp as u64;
         if !bypass_timestamp_check {
@@ -189,13 +203,13 @@ pub mod spl_token_timelock {
         // Calculate the cliff amount based on cliff release rate.
         if cliff_release_rate != 0 {
             vesting.cliff_amount =
-                amount_to_ui_amount(total_amount.saturating_mul(cliff_release_rate), 2) as u64;
+                total_amount.saturating_mul(cliff_release_rate) / 100 as u64;
         }
 
         // Calculate the tge amount based on tge release rate.
         if tge_release_rate != 0 {
             vesting.tge_amount =
-                amount_to_ui_amount(total_amount.saturating_mul(tge_release_rate), 2) as u64;
+                total_amount.saturating_mul(tge_release_rate) / 100 as u64;
         }
 
         // Calculate amount to be unlocked per time during linear unlocking.
@@ -223,6 +237,15 @@ pub mod spl_token_timelock {
         let cpi_program = ctx.accounts.token_program.to_account_info();
         let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts).with_signer(signer);
         token::transfer(cpi_ctx, total_amount)?;
+
+        // msg!("periodic_unlock_amount: {}", vesting.periodic_unlock_amount);
+        // msg!("vesting.tge_amount: {}", vesting.tge_amount);
+        // msg!("cliff_amount: {}", vesting.cliff_amount);
+        // msg!("end_ts: {}", end_ts);
+        // msg!("start_ts: {}", start_ts);
+        // msg!("end_ts: {}", end_ts);
+        // msg!("cliff: {}", cliff);
+        // msg!("period: {}", period);
 
         emit!(CreateVestingEvent {
             data: total_amount,

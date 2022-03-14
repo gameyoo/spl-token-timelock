@@ -78,13 +78,13 @@ describe('spl-token-timelock', () => {
 
     // Timestamp (in seconds) when the stream/token vesting starts,Divide by 1000 since Unix timestamp is seconds.
     //const start = new BN(+new Date() / 1000 - 5);    //Verify bypass_timestamp_check param that is works.
-    const start = new BN(+new Date() / 1000 + 5);
+    const start = new BN(+new Date() / 1000 + 10);
 
     // Timestamp (in seconds) of cliff.
-    const cliff = new BN(+new Date() / 1000 + 10);
+    const cliff = new BN(+new Date() / 1000 + 30);
 
     // Timestamp (in seconds) when the stream/token vesting end, +60 seconds.
-    const end = new BN(+new Date() / 1000 + 30);
+    const end = new BN(+new Date() / 1000 + 60);
 
     // In seconds.
     const period = new BN(1);
@@ -92,7 +92,7 @@ describe('spl-token-timelock', () => {
     // Amount to deposit.
     const depositedAmount = new BN(10 * LAMPORTS_PER_SOL);
 
-    const vestingId = 100001;
+    const vestingId = 100009;
 
     let mint;
     let granter = provider.wallet;
@@ -106,7 +106,7 @@ describe('spl-token-timelock', () => {
     let escrowVault;
     let escrowVaultBump;
 
-    const recipient = Keypair.generate();
+    let recipient = Keypair.generate();
 
     before(async () => {
 
@@ -116,6 +116,11 @@ describe('spl-token-timelock', () => {
             granter.publicKey,
             DECIMALS
         );
+
+        // mint = new PublicKey("GYCVdmDthkf3jSz5ns6fkzCmHub7FSZxjVCfbfGqkH7P");
+        // let recipient = new PublicKey("GbyrU3TNvSKA6p9tpWy8LN5cgBe2SLTURiPMwHz5LkTH");
+
+        console.log("mint: ", mint);
 
         [config, configBump] = await PublicKey.findProgramAddress(
             [Buffer.from("gyc_timelock")],
@@ -128,7 +133,7 @@ describe('spl-token-timelock', () => {
         );
 
         [vesting, vestingBump] = await PublicKey.findProgramAddress(
-            [vestingId.toString(), recipient.publicKey.toBuffer()],
+            [vestingId.toString(), recipient.toBuffer()],
             program.programId
         );
 
@@ -143,7 +148,7 @@ describe('spl-token-timelock', () => {
             ASSOCIATED_TOKEN_PROGRAM_ID,
             TOKEN_PROGRAM_ID,
             mint,
-            recipient.publicKey
+            recipient
         );
 
         console.log(`Before: `);
@@ -151,7 +156,7 @@ describe('spl-token-timelock', () => {
 vestingId: ${vestingId}
 signer wallet: ${granter.publicKey.toBase58()}
 mint: ${mint.toBase58()}
-config: ${mint.toBase58()}
+config: ${config.toBase58()}
 configBump: ${configBump}
 paymentVault: ${paymentVault.toBase58()}
 paymentVaultBump: ${paymentVaultBump}
@@ -159,7 +164,7 @@ vesting: ${vesting.toBase58()}
 vestingBump: ${vestingBump}
 escrowVault: ${escrowVault.toBase58()}
 escrowVaultBump: ${escrowVaultBump}
-recipient wallet: ${recipient.publicKey.toBase58()}
+recipient wallet: ${recipient.toBase58()}
 recipient token: ${recipientToken.toBase58()}
 `);
 
@@ -237,7 +242,7 @@ recipient token: ${recipientToken.toBase58()}
             cliff,
             new BN(10),
             new BN(20),
-            false, {
+            true, {
             accounts: {
                 signer: granter.publicKey,
                 paymentVault: paymentVault,

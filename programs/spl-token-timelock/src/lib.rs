@@ -84,19 +84,18 @@ pub mod spl_token_timelock {
     ) -> ProgramResult {
         msg!("create vesting");
 
-        // msg!("total_amount: {}", total_amount);
-        // msg!("escrow_vault_bump: {}", escrow_vault_bump);
-        // msg!("vesting_bump: {}", vesting_bump);
-        // msg!("vesting_id: {}", vesting_id);
-        // msg!("vesting_name: {:?}", vesting_name);
-        // msg!("investor_wallet_address: {:?}", investor_wallet_address);
-        // msg!("start_ts: {}", start_ts);
-        // msg!("end_ts: {}", end_ts);
-        // msg!("period: {}", period);
-        // msg!("cliff: {}", cliff);
-        // msg!("cliff_release_rate: {}", cliff_release_rate);
-        // msg!("tge_release_rate: {}", tge_release_rate);
-        // msg!("bypass_timestamp_check: {}", bypass_timestamp_check);
+        msg!("total_amount: {}", total_amount);
+        msg!("escrow_vault_bump: {}", escrow_vault_bump);
+        msg!("vesting_bump: {}", vesting_bump);
+        msg!("vesting_id: {}", vesting_id);
+        msg!("vesting_name: {:?}", vesting_name);
+        msg!("investor_wallet_address: {:?}", investor_wallet_address);
+        msg!("start_ts: {}", start_ts);
+        msg!("end_ts: {}", end_ts);
+        msg!("period: {}", period);
+        msg!("cliff: {}", cliff);
+        msg!("cliff_release_rate: {}", cliff_release_rate);
+        msg!("tge_release_rate: {}", tge_release_rate);
 
         let now = ctx.accounts.clock.unix_timestamp as u64;
         if !bypass_timestamp_check {
@@ -214,12 +213,12 @@ pub mod spl_token_timelock {
 
         // Calculate amount to be unlocked per time during linear unlocking.
         vesting.periodic_unlock_amount =
-            ((total_amount - vesting.tge_amount - vesting.cliff_amount) / (end_ts - start_ts))
-                * period;
+            (((total_amount as f64 - vesting.tge_amount as f64 - vesting.cliff_amount as f64) / (end_ts as f64 - start_ts as f64))
+                * period as f64) as u64;
         if cliff != 0 {
             vesting.periodic_unlock_amount =
-                ((total_amount - vesting.tge_amount - vesting.cliff_amount) / (end_ts - cliff))
-                    * period;
+                (((total_amount as f64 - vesting.tge_amount as f64 - vesting.cliff_amount as f64) / (end_ts as f64 - cliff as f64))
+                    * period as f64) as u64;
         }
 
         // Transfer tokens into the escrow vault.
@@ -238,14 +237,14 @@ pub mod spl_token_timelock {
         let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts).with_signer(signer);
         token::transfer(cpi_ctx, total_amount)?;
 
-        // msg!("periodic_unlock_amount: {}", vesting.periodic_unlock_amount);
-        // msg!("vesting.tge_amount: {}", vesting.tge_amount);
-        // msg!("cliff_amount: {}", vesting.cliff_amount);
-        // msg!("end_ts: {}", end_ts);
-        // msg!("start_ts: {}", start_ts);
-        // msg!("end_ts: {}", end_ts);
-        // msg!("cliff: {}", cliff);
-        // msg!("period: {}", period);
+        msg!("periodic_unlock_amount: {}", vesting.periodic_unlock_amount);
+        msg!("vesting.tge_amount: {}", vesting.tge_amount);
+        msg!("cliff_amount: {}", vesting.cliff_amount);
+        msg!("end_ts: {}", end_ts);
+        msg!("start_ts: {}", start_ts);
+        msg!("end_ts: {}", end_ts);
+        msg!("cliff: {}", cliff);
+        msg!("period: {}", period);
 
         emit!(CreateVestingEvent {
             data: total_amount,

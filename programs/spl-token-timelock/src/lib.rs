@@ -9,6 +9,7 @@
 */
 
 use anchor_lang::prelude::*;
+use anchor_lang::solana_program::system_program;
 use anchor_spl::{
     associated_token::{self, AssociatedToken, Create},
     token::{self, CloseAccount, Mint, Token, TokenAccount, Transfer},
@@ -402,15 +403,19 @@ pub struct Initialize<'info> {
     pub config: Box<Account<'info, Config>>,
 
     /// Token program.
+    #[account(address = token::ID)]
     pub token_program: Program<'info, Token>,
 
     /// Associated token program.
+    #[account(address = associated_token::ID)]
     pub associated_token_program: Program<'info, AssociatedToken>,
 
     /// System program.
+    #[account(address = system_program::ID)]
     pub system_program: Program<'info, System>,
 
     ///Rent for rent exempt.
+    #[account(address = solana_program::sysvar::rent::ID)]
     pub rent: Sysvar<'info, Rent>,
 }
 
@@ -472,18 +477,23 @@ pub struct CreateVesting<'info> {
     pub mint: Account<'info, Mint>,
 
     /// Token program.
+    #[account(address = token::ID)]
     pub token_program: Program<'info, Token>,
 
     /// Associated token program.
+    #[account(address = associated_token::ID)]
     pub associated_token_program: Program<'info, AssociatedToken>,
 
     /// System program.
+    #[account(address = system_program::ID)]
     pub system_program: Program<'info, System>,
 
     /// Clock represents network time.
+    #[account(address = solana_program::sysvar::clock::ID)]
     pub clock: Sysvar<'info, Clock>,
 
     ///Rent for rent exempt.
+    #[account(address = solana_program::sysvar::rent::ID)]
     pub rent: Sysvar<'info, Rent>,
 }
 
@@ -523,9 +533,11 @@ pub struct Withdraw<'info> {
     pub mint: Account<'info, Mint>,
 
     /// Token program.
+    #[account(address = token::ID)]
     pub token_program: Program<'info, Token>,
 
     /// Clock represents network time.
+    #[account(address = solana_program::sysvar::clock::ID)]
     pub clock: Sysvar<'info, Clock>,
 }
 
@@ -580,6 +592,7 @@ pub struct CancelVesting<'info> {
     pub mint: Account<'info, Mint>,
 
     /// Token program.
+    #[account(address = token::ID)]
     pub token_program: Program<'info, Token>,
 }
 

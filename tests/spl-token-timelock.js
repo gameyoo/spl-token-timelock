@@ -78,21 +78,21 @@ describe('spl-token-timelock', () => {
 
     // Timestamp (in seconds) when the stream/token vesting starts,Divide by 1000 since Unix timestamp is seconds.
     //const start = new BN(+new Date() / 1000 - 5);    //Verify bypass_timestamp_check param that is works.
-    const start = new BN(+new Date() / 1000 + 10);
+    const start = new BN(1647705600);
 
     // Timestamp (in seconds) of cliff.
-    const cliff = new BN(+new Date() / 1000 + 30);
+    const cliff = new BN(0);
 
     // Timestamp (in seconds) when the stream/token vesting end, +60 seconds.
-    const end = new BN(+new Date() / 1000 + 60);
+    const end = new BN(1655654399);
 
     // In seconds.
-    const period = new BN(1);
+    const period = new BN(86400);
 
     // Amount to deposit.
-    const depositedAmount = new BN(10 * LAMPORTS_PER_SOL);
+    const depositedAmount = new BN(428.268583);
 
-    const vestingId = 100009;
+    const vestingId = 101043;
 
     let mint;
     let granter = provider.wallet;
@@ -111,14 +111,15 @@ describe('spl-token-timelock', () => {
     before(async () => {
 
         // Create token mint.
-        mint = await common.createMint(
-            provider,
-            granter.publicKey,
-            DECIMALS
-        );
+        // mint = await common.createMint(
+        //     provider,
+        //     granter.publicKey,
+        //     DECIMALS
+        // );
 
-        // mint = new PublicKey("GYCVdmDthkf3jSz5ns6fkzCmHub7FSZxjVCfbfGqkH7P");
-        // let recipient = new PublicKey("GbyrU3TNvSKA6p9tpWy8LN5cgBe2SLTURiPMwHz5LkTH");
+        mint = new PublicKey("GYCVdmDthkf3jSz5ns6fkzCmHub7FSZxjVCfbfGqkH7P");
+        let recipient = new PublicKey("55YsfAvxUi2RkGye5AS3hH6kvoz3Bf1hoQaoX4VVKaF7");
+        //let recipient = new PublicKey("3tTiZUz1GsbfUTYq7PJqeUGFWukqZvT19auTFtJN4sXn");
 
         console.log("mint: ", mint);
 
@@ -133,7 +134,11 @@ describe('spl-token-timelock', () => {
         );
 
         [vesting, vestingBump] = await PublicKey.findProgramAddress(
-            [vestingId.toString(), recipient.toBuffer()],
+            // [vestingId.toString(), recipient.toBuffer()],
+            [
+                Buffer.from(String(vestingId)),
+                recipient.toBuffer()
+            ],
             program.programId
         );
 
@@ -153,20 +158,16 @@ describe('spl-token-timelock', () => {
 
         console.log(`Before: `);
         console.log(`programId: ${program.programId.toBase58()}
-vestingId: ${vestingId}
 signer wallet: ${granter.publicKey.toBase58()}
 mint: ${mint.toBase58()}
 config: ${config.toBase58()}
 configBump: ${configBump}
 paymentVault: ${paymentVault.toBase58()}
 paymentVaultBump: ${paymentVaultBump}
-vesting: ${vesting.toBase58()}
-vestingBump: ${vestingBump}
-escrowVault: ${escrowVault.toBase58()}
-escrowVaultBump: ${escrowVaultBump}
-recipient wallet: ${recipient.toBase58()}
-recipient token: ${recipientToken.toBase58()}
 `);
+
+        // const vestingAccount = await program.account.vesting.fetch(vesting);
+        // console.log("fetch vesting: ", vestingAccount);
 
     });
 
@@ -193,13 +194,13 @@ recipient token: ${recipientToken.toBase58()}
 
         console.log(`tx: ${tx}`);
 
-        // Mint some tokens to granter.
+        //Mint some tokens to granter.
         await mintTo(
             provider,
             mint,
             paymentVault,
             granter.publicKey,
-            10 * LAMPORTS_PER_SOL,
+            10000 * LAMPORTS_PER_SOL,
             granter.payer
         );
 
@@ -227,8 +228,8 @@ recipient token: ${recipientToken.toBase58()}
         });
 
         // Create vesting by Invoke createVesting instruction of on-chain program.
-        let vesting_name = nacl.util.decodeUTF8("GoGo Corp");
-        let investor_wallet_address = nacl.util.decodeUTF8("0x519d6DCdf1acbFD8774751F1043deeeA8778ef4a");
+        let vesting_name = nacl.util.decodeUTF8("DaoLaunch_38");
+        let investor_wallet_address = nacl.util.decodeUTF8("55YsfAvxUi2RkGye5AS3hH6kvoz3Bf1hoQaoX4VVKaF7");
         const tx = await program.rpc.createVesting(
             depositedAmount,
             escrowVaultBump,
@@ -240,7 +241,7 @@ recipient token: ${recipientToken.toBase58()}
             end,
             period,
             cliff,
-            new BN(10),
+            new BN(0),
             new BN(20),
             true, {
             accounts: {
@@ -276,18 +277,18 @@ recipient token: ${recipientToken.toBase58()}
             vesting
         );
 
-        console.log("vesting: ", _vesting);
-        let vesting_data = decode(_vesting.data);
-        //console.log(`vesting_data: ${vesting_data}`);
-        console.log("vesting_data: ", vesting_data);
-        console.log(`
-${vesting_data.granter.toBase58()}
-${vesting_data.granterToken.toBase58()}
-${vesting_data.recipient.toBase58()}
-${vesting_data.recipientToken.toBase58()}
-${vesting_data.mint.toBase58()}
-${vesting_data.escrowVault.toBase58()}
-`);
+//         console.log("vesting: ", _vesting);
+//         let vesting_data = decode(_vesting.data);
+//         //console.log(`vesting_data: ${vesting_data}`);
+//         console.log("vesting_data: ", vesting_data);
+//         console.log(`
+// ${vesting_data.granter.toBase58()}
+// ${vesting_data.granterToken.toBase58()}
+// ${vesting_data.recipient.toBase58()}
+// ${vesting_data.recipientToken.toBase58()}
+// ${vesting_data.mint.toBase58()}
+// ${vesting_data.escrowVault.toBase58()}
+// `);
 
         const vestingAccount = await program.account.vesting.fetch(vesting);
         console.log("fetch vesting: ", vestingAccount);
@@ -312,7 +313,7 @@ escrowVault: ${_escrowVaultTokenData.amount}`);
 
     it("Withdraw", async () => {
 
-        await sleep(10000);
+        await sleep(2000);
 
         console.log(`Withdraw: `);
         console.log(`recipient token: ${recipientToken.toBase58()}`);
@@ -347,7 +348,7 @@ escrowVault: ${_escrowVaultTokenData.amount}`);
             ).amount;
         }
 
-        const withdrawAmount = new BN(2 * LAMPORTS_PER_SOL);
+        const withdrawAmount = new BN(85.653716);
 
         console.log(`vesting: ${vesting.toBase58()}
 escrowVault: ${escrowVault.toBase58()}`);
@@ -423,112 +424,112 @@ ${vesting_data.escrowVault.toBase58()}
         await program.removeEventListener(listener);
     });
 
-    it("Cancel", async () => {
+//     it("Cancel", async () => {
 
-        await sleep(12000);
+//         await sleep(12000);
 
-        // Listen cancel event of on-chain program.
-        let listener = null;
-        listener = program.addEventListener("CancelEvent", (event, slot) => {
-            console.log("slot: ", slot);
-            console.log("event data: ", event.data.toNumber());
-            console.log("event status: ", event.status);
-        });
+//         // Listen cancel event of on-chain program.
+//         let listener = null;
+//         listener = program.addEventListener("CancelEvent", (event, slot) => {
+//             console.log("slot: ", slot);
+//             console.log("event data: ", event.data.toNumber());
+//             console.log("event status: ", event.status);
+//         });
 
-        const oldBalance = await provider.connection.getBalance(granter.publicKey);
+//         const oldBalance = await provider.connection.getBalance(granter.publicKey);
 
-        console.log(`Cancel: `);
-        const oldPaymentVaultInfo = await program.provider.connection.getAccountInfo(
-            paymentVault
-        );
+//         console.log(`Cancel: `);
+//         const oldPaymentVaultInfo = await program.provider.connection.getAccountInfo(
+//             paymentVault
+//         );
 
-        const oldPaymentVaultAmount = common.token.parseTokenAccountData(
-            oldPaymentVaultInfo.data
-        ).amount;
+//         const oldPaymentVaultAmount = common.token.parseTokenAccountData(
+//             oldPaymentVaultInfo.data
+//         ).amount;
 
-        const oldEscrowVaultAccountInfo = await program.provider.connection.getAccountInfo(
-            escrowVault
-        );
+//         const oldEscrowVaultAccountInfo = await program.provider.connection.getAccountInfo(
+//             escrowVault
+//         );
 
-        let oldEscrowVaultAmount;
-        if (oldEscrowVaultAccountInfo) {
-            oldEscrowVaultAmount = common.token.parseTokenAccountData(
-                oldEscrowVaultAccountInfo.data
-            ).amount;
-        }
+//         let oldEscrowVaultAmount;
+//         if (oldEscrowVaultAccountInfo) {
+//             oldEscrowVaultAmount = common.token.parseTokenAccountData(
+//                 oldEscrowVaultAccountInfo.data
+//             ).amount;
+//         }
 
-        const oldRecipientTokenAccountInfo = await program.provider.connection.getAccountInfo(
-            recipientToken
-        );
+//         const oldRecipientTokenAccountInfo = await program.provider.connection.getAccountInfo(
+//             recipientToken
+//         );
 
-        let oldRecipientTokenAmount;
-        if (oldRecipientTokenAccountInfo) {
-            oldRecipientTokenAmount = common.token.parseTokenAccountData(
-                oldRecipientTokenAccountInfo.data
-            ).amount;
-        }
+//         let oldRecipientTokenAmount;
+//         if (oldRecipientTokenAccountInfo) {
+//             oldRecipientTokenAmount = common.token.parseTokenAccountData(
+//                 oldRecipientTokenAccountInfo.data
+//             ).amount;
+//         }
 
-        // Cancel vesting by Invoke cancel instruction of on-chain program.
-        const tx = await program.rpc.cancel({
-            accounts: {
-                signer: granter.publicKey,
-                paymentVault: paymentVault,
-                config: config,
-                vesting: vesting,
-                escrowVault: escrowVault,
-                mint: mint,
-                tokenProgram: TOKEN_PROGRAM_ID
-            },
-            signers: [granter.payer]
-        });
+//         // Cancel vesting by Invoke cancel instruction of on-chain program.
+//         const tx = await program.rpc.cancel({
+//             accounts: {
+//                 signer: granter.publicKey,
+//                 paymentVault: paymentVault,
+//                 config: config,
+//                 vesting: vesting,
+//                 escrowVault: escrowVault,
+//                 mint: mint,
+//                 tokenProgram: TOKEN_PROGRAM_ID
+//             },
+//             signers: [granter.payer]
+//         });
 
-        console.log(`tx: ${tx}`);
+//         console.log(`tx: ${tx}`);
 
-        /*
-            Get and print the relevant account information and verify it accordingly.
-        */
-        let newEscrowVaultAmount = null;
-        const newEscrowVaultAccountInfo = await program.provider.connection.getAccountInfo(
-            escrowVault
-        );
+//         /*
+//             Get and print the relevant account information and verify it accordingly.
+//         */
+//         let newEscrowVaultAmount = null;
+//         const newEscrowVaultAccountInfo = await program.provider.connection.getAccountInfo(
+//             escrowVault
+//         );
 
-        if (newEscrowVaultAccountInfo) {
-            newEscrowVaultAmount = common.token.parseTokenAccountData(
-                newEscrowVaultAccountInfo.data
-            ).amount;
-        }
+//         if (newEscrowVaultAccountInfo) {
+//             newEscrowVaultAmount = common.token.parseTokenAccountData(
+//                 newEscrowVaultAccountInfo.data
+//             ).amount;
+//         }
 
-        const newRecipientTokenAccountInfo = await program.provider.connection.getAccountInfo(
-            recipientToken
-        );
+//         const newRecipientTokenAccountInfo = await program.provider.connection.getAccountInfo(
+//             recipientToken
+//         );
 
-        const newRecipientTokenAmount = common.token.parseTokenAccountData(
-            newRecipientTokenAccountInfo.data
-        ).amount;
+//         const newRecipientTokenAmount = common.token.parseTokenAccountData(
+//             newRecipientTokenAccountInfo.data
+//         ).amount;
 
-        const newPaymentVaultInfo = await program.provider.connection.getAccountInfo(
-            paymentVault
-        );
+//         const newPaymentVaultInfo = await program.provider.connection.getAccountInfo(
+//             paymentVault
+//         );
 
-        const newPaymentVaultAmount = common.token.parseTokenAccountData(
-            newPaymentVaultInfo.data
-        ).amount;
+//         const newPaymentVaultAmount = common.token.parseTokenAccountData(
+//             newPaymentVaultInfo.data
+//         ).amount;
 
-        console.log(`oldPaymentVault: ${oldPaymentVaultAmount}
-old recipientToken: ${oldRecipientTokenAmount}
-old escrowVault: ${oldEscrowVaultAmount}`);
+//         console.log(`oldPaymentVault: ${oldPaymentVaultAmount}
+// old recipientToken: ${oldRecipientTokenAmount}
+// old escrowVault: ${oldEscrowVaultAmount}`);
 
-        console.log(`newPaymentVault: ${newPaymentVaultAmount}
-new recipientToken: ${newRecipientTokenAmount}
-new escrowVault: ${newEscrowVaultAmount}`);
+//         console.log(`newPaymentVault: ${newPaymentVaultAmount}
+// new recipientToken: ${newRecipientTokenAmount}
+// new escrowVault: ${newEscrowVaultAmount}`);
 
-        const newBalance = await provider.connection.getBalance(granter.publicKey);
-        console.log("Returned:", newBalance - oldBalance);
-        assert.ok(newEscrowVaultAmount === null);
-        assert.ok((new BN(newRecipientTokenAmount + newPaymentVaultAmount)).eq(depositedAmount));
+//         const newBalance = await provider.connection.getBalance(granter.publicKey);
+//         console.log("Returned:", newBalance - oldBalance);
+//         assert.ok(newEscrowVaultAmount === null);
+//         assert.ok((new BN(newRecipientTokenAmount + newPaymentVaultAmount)).eq(depositedAmount));
 
-        await program.removeEventListener(listener);
+//         await program.removeEventListener(listener);
 
 
-    });
+//     });
 });

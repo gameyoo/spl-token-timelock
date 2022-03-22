@@ -92,7 +92,7 @@ describe('spl-token-timelock', () => {
     // Amount to deposit.
     const depositedAmount = new BN(428.268583 * LAMPORTS_PER_SOL);
 
-    const vestingId = 101043;
+    const vestingId = 100801;
 
     let mint;
     let granter = provider.wallet;
@@ -107,7 +107,7 @@ describe('spl-token-timelock', () => {
     let escrowVaultBump;
 
     //let recipient = Keypair.generate();
-    let recipient = new PublicKey("55YsfAvxUi2RkGye5AS3hH6kvoz3Bf1hoQaoX4VVKaF7");
+    let recipient = new PublicKey("oRy4jmWm5MNuKTRaBn1t3tGmL9ERrDzoS2y8P19bM52");
 
     before(async () => {
 

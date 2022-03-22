@@ -220,10 +220,7 @@ pub mod spl_token_timelock {
         vesting.tge_amount = 0;
 
         // Calculate the cliff amount based on cliff release rate.
-        if cliff_release_rate != 0 {
-            vesting.cliff_amount =
-                total_amount.saturating_mul(cliff_release_rate) / 100 as u64;
-        }
+        vesting.cliff_amount = 0;
 
         // Calculate the tge amount based on tge release rate.
         if tge_release_rate != 0 {
@@ -233,13 +230,8 @@ pub mod spl_token_timelock {
 
         // Calculate amount to be unlocked per time during linear unlocking.
         vesting.periodic_unlock_amount =
-            (((total_amount as f64 - vesting.tge_amount as f64 - vesting.cliff_amount as f64) / (end_ts as f64 - start_ts as f64))
+            (((total_amount as f64 - vesting.tge_amount as f64) / (end_ts as f64 - start_ts as f64))
                 * period as f64) as u64;
-        if cliff != 0 {
-            vesting.periodic_unlock_amount =
-                (((total_amount as f64 - vesting.tge_amount as f64 - vesting.cliff_amount as f64) / (end_ts as f64 - cliff as f64))
-                    * period as f64) as u64;
-        }
 
         // Transfer tokens into the escrow vault.
         let cpi_accounts = Transfer {
@@ -770,14 +762,10 @@ pub fn available_for_withdrawal(vesting: &Vesting, current_ts: u64) -> u64 {
         return vesting.remaining_amount;
     }
 
-    let interval = current_ts - vesting.accounting_ts;
+    let interval = current_ts - vesting.start_ts;
     let unlocked = interval.checked_div(vesting.period).unwrap() * vesting.periodic_unlock_amount;
-    let cliff_amount = if current_ts >= vesting.cliff {
-        vesting.cliff_amount
-    } else {
-        0
-    };
-    let available = unlocked + vesting.tge_amount + cliff_amount - vesting.withdrawn_amount;
+
+    let available = unlocked + vesting.tge_amount - vesting.withdrawn_amount;
 
     available
 }

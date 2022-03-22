@@ -106,7 +106,9 @@ pub mod spl_token_timelock {
                     data: ErrorCode::InvalidSchedule as u64,
                     status: "err".to_string(),
                 });
+
                 msg!("time_check failed:");
+                msg!("recipient: {}", ctx.accounts.recipient.key);
                 msg!("now: {}", now);
                 msg!("start_ts: {}", start_ts);
                 msg!("end_ts: {}", end_ts);
@@ -122,6 +124,7 @@ pub mod spl_token_timelock {
                 status: "err".to_string(),
             });
             msg!("period illegal:");
+            msg!("recipient: {}", ctx.accounts.recipient.key);
             msg!("period: {}", period);
             msg!("start_ts: {}", start_ts);
             msg!("end_ts: {}", end_ts);
@@ -138,6 +141,7 @@ pub mod spl_token_timelock {
                 status: "err".to_string(),
             });
             msg!("tge_release_rate or cliff_release_rate illegal:");
+            msg!("recipient: {}", ctx.accounts.recipient.key);
             msg!("tge_release_rate: {}", tge_release_rate);
             msg!("cliff_release_rate: {}", cliff_release_rate);
             return Err(ErrorCode::InvalidReleaseRate.into());
@@ -153,7 +157,9 @@ pub mod spl_token_timelock {
                 data: ErrorCode::InvalidAssociatedTokenAddress as u64,
                 status: "err".to_string(),
             });
-            msg!("recipient_tokens_key not match: {}", recipient_tokens_key);
+            msg!("recipient tokens key not match:");
+            msg!("recipient_tokens_key: {}", recipient_tokens_key);
+            msg!("ctx.accounts.recipient_token.key: {}", *ctx.accounts.recipient_token.key);
             return Err(ErrorCode::InvalidAssociatedTokenAddress.into());
         }
 
@@ -281,6 +287,7 @@ pub mod spl_token_timelock {
                 status: "err".to_string(),
             });
             msg!("withdraw param amount illegal : {}", amount);
+            msg!("recipient_token : {}", *ctx.accounts.recipient_token.to_account_info().key);
             return Err(ErrorCode::InvalidWithdrawalAmount.into());
         }
 
@@ -293,11 +300,13 @@ pub mod spl_token_timelock {
                 status: "err".to_string(),
             });
             msg!("withdrawal amount illegal : {}", available);
+            msg!("recipient_token : {}", *ctx.accounts.recipient_token.to_account_info().key);
             return Err(ErrorCode::InsufficientWithdrawalAmount.into());
         }
 
         if amount > available {
             msg!("withdraw param amount is bigger than available :");
+            msg!("recipient_token : {}", *ctx.accounts.recipient_token.to_account_info().key);
             msg!("amount : {}", amount);
             msg!("available : {}", available);
             return Err(ErrorCode::InvalidWithdrawalAmount.into());

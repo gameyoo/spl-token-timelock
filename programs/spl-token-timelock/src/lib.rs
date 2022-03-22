@@ -106,6 +106,11 @@ pub mod spl_token_timelock {
                     data: ErrorCode::InvalidSchedule as u64,
                     status: "err".to_string(),
                 });
+                msg!("time_check failed:");
+                msg!("now: {}", now);
+                msg!("start_ts: {}", start_ts);
+                msg!("end_ts: {}", end_ts);
+                msg!("cliff: {}", cliff);
                 return Err(ErrorCode::InvalidSchedule.into());
             }
         }
@@ -116,6 +121,10 @@ pub mod spl_token_timelock {
                 data: ErrorCode::InvalidPeriod as u64,
                 status: "err".to_string(),
             });
+            msg!("period illegal:");
+            msg!("period: {}", period);
+            msg!("start_ts: {}", start_ts);
+            msg!("end_ts: {}", end_ts);
             return Err(ErrorCode::InvalidPeriod.into());
         }
 
@@ -128,6 +137,9 @@ pub mod spl_token_timelock {
                 data: ErrorCode::InvalidReleaseRate as u64,
                 status: "err".to_string(),
             });
+            msg!("tge_release_rate or cliff_release_rate illegal:");
+            msg!("tge_release_rate: {}", tge_release_rate);
+            msg!("cliff_release_rate: {}", cliff_release_rate);
             return Err(ErrorCode::InvalidReleaseRate.into());
         }
 
@@ -141,6 +153,7 @@ pub mod spl_token_timelock {
                 data: ErrorCode::InvalidAssociatedTokenAddress as u64,
                 status: "err".to_string(),
             });
+            msg!("recipient_tokens_key not match: {}", recipient_tokens_key);
             return Err(ErrorCode::InvalidAssociatedTokenAddress.into());
         }
 
@@ -188,7 +201,7 @@ pub mod spl_token_timelock {
         vesting.created_ts = now;
         vesting.start_ts = start_ts;
         vesting.end_ts = end_ts;
-        vesting.accounting_ts = now;
+        vesting.accounting_ts = start_ts;
         vesting.last_withdrawn_at = 0;
 
         vesting.period = period;
@@ -267,18 +280,27 @@ pub mod spl_token_timelock {
                 data: ErrorCode::InvalidWithdrawalAmount as u64,
                 status: "err".to_string(),
             });
+            msg!("withdraw param amount illegal : {}", amount);
             return Err(ErrorCode::InvalidWithdrawalAmount.into());
         }
 
         let now = ctx.accounts.clock.unix_timestamp as u64;
         let available = available_for_withdrawal(&ctx.accounts.vesting, now);
 
-        if amount > available {
+        if available == 0 {
             emit!(WithdrawEvent {
-                data: ErrorCode::InsufficientWithdrawalBalance as u64,
+                data: ErrorCode::InsufficientWithdrawalAmount as u64,
                 status: "err".to_string(),
             });
-            return Err(ErrorCode::InsufficientWithdrawalBalance.into());
+            msg!("withdrawal amount illegal : {}", available);
+            return Err(ErrorCode::InsufficientWithdrawalAmount.into());
+        }
+
+        if amount > available {
+            msg!("withdraw param amount is bigger than available :");
+            msg!("amount : {}", amount);
+            msg!("available : {}", available);
+            return Err(ErrorCode::InvalidWithdrawalAmount.into());
         }
 
         // Transfer funds out.
@@ -823,4 +845,6 @@ pub enum ErrorCode {
     InvalidTokenVaultMismatch,
     #[msg("The token authority mismatch.")]
     InvalidTokenAuthorityMismatch,
+    #[msg("Invalid Withdrawal amount is zero.")]
+    InsufficientWithdrawalAmount,
 }

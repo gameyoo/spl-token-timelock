@@ -90,7 +90,7 @@ describe('spl-token-timelock', () => {
     const period = new BN(86400);
 
     // Amount to deposit.
-    const depositedAmount = new BN(428.268583);
+    const depositedAmount = new BN(428.268583 * LAMPORTS_PER_SOL);
 
     const vestingId = 101043;
 
@@ -106,7 +106,8 @@ describe('spl-token-timelock', () => {
     let escrowVault;
     let escrowVaultBump;
 
-    let recipient = Keypair.generate();
+    //let recipient = Keypair.generate();
+    let recipient = new PublicKey("55YsfAvxUi2RkGye5AS3hH6kvoz3Bf1hoQaoX4VVKaF7");
 
     before(async () => {
 
@@ -118,7 +119,7 @@ describe('spl-token-timelock', () => {
         // );
 
         mint = new PublicKey("GYCVdmDthkf3jSz5ns6fkzCmHub7FSZxjVCfbfGqkH7P");
-        let recipient = new PublicKey("55YsfAvxUi2RkGye5AS3hH6kvoz3Bf1hoQaoX4VVKaF7");
+        //let recipient = new PublicKey("55YsfAvxUi2RkGye5AS3hH6kvoz3Bf1hoQaoX4VVKaF7");
         //let recipient = new PublicKey("3tTiZUz1GsbfUTYq7PJqeUGFWukqZvT19auTFtJN4sXn");
 
         console.log("mint: ", mint);
@@ -248,7 +249,7 @@ paymentVaultBump: ${paymentVaultBump}
                 signer: granter.publicKey,
                 paymentVault: paymentVault,
                 config: config,
-                recipient: recipient.publicKey,
+                recipient: recipient,
                 recipientToken: recipientToken,
                 vesting: vesting,
                 escrowVault: escrowVault,
